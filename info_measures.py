@@ -4,16 +4,58 @@ from __future__ import print_function, division
 
 import numpy as np
 import matplotlib.pyplot as plt
+import scipy.optimize as opt
 
-from sklearn import preprocessing, svm
+from sklearn import preprocessing, svm, linear_model
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import (GridSearchCV, RepeatedStratifiedKFold,
                                      cross_validate)
+from sklearn.kernel_approximation import Nystroem, RBFSampler
+
+#import thundersvm
+
+from utils import powerset
 
 
 def Hb(p):
     """Binary entropy function."""
     return - p * np.log2(p) - (1 - p) * np.log2(1 - p)
+
+
+def Hb_inv(y):
+    """
+    Inverse binary entropy function. Provides a result in the interval [0, 0.5].
+    """
+    if y == 0:
+        return 0
+    elif y == 1:
+        return 0.5
+    elif y > 1 or y < 0:
+        raise ValueError('y should be between 0 and 1')
+
+    p_approx = 0.5 * (1 - np.sqrt(1 - y))
+
+    fn = lambda z: (y - Hb(z))
+    jac = lambda z: np.log2(z / (1 - z))
+    res = opt.root_scalar(fn, bracket=(0+1e-6, 0.5-1e-6), fprime=jac, x0=p_approx)
+
+    if not res.converged:
+        # TODO Make this a warning
+        print('Hb_inv did not converge')
+    return res.root
+
+
+def acc_from_mi(mi, Hx=1):
+    """
+    Compute effective classification accuracy from mutual information.
+
+    I(X ; Y) = H(X) - H(X | Y)
+    H(X | Y) = H(X) - I(X ; Y)  => Randomness in X given Y
+                                => Hb(Prob of error in inferring X given Y)
+    Acc(X | Y) = 1 - Hb_inv(H(X) - I(X ; Y))  => Hb_inv(1 - Prob of error)
+    """
+
+    return 1 - Hb_inv(Hx - mi)
 
 
 def mutual_info_bin(x, y, Hx=None, num_train=None, return_acc=False):
@@ -25,6 +67,9 @@ def mutual_info_bin(x, y, Hx=None, num_train=None, return_acc=False):
     # XXX: Hx estimation is not correct - Hx is computed on an x that has not
     # been re-scaled, whereas Hx_y is computed on a rescaled x - differential
     # entropy is not immune to scaling - same scaling should be applied to both
+
+    # I don't know what the above complaint is referring to... X is not a
+    # continuous random variable, so H(X) is not differential entropy!
 
     # Use provided entropy of x, or compute from data
     if (type(Hx) is float or type(Hx) is int) and (0 <= Hx <= 1):
@@ -47,9 +92,17 @@ def mutual_info_bin(x, y, Hx=None, num_train=None, return_acc=False):
 
     # Classifier objects
     scaler = preprocessing.StandardScaler()
-    classifer = svm.SVC(kernel='rbf')
+    #classifier = svm.SVC(kernel='rbf')
+    #classifier = thundersvm.SVC(kernel='rbf')
+    feature_map = Nystroem(n_components=100)
+    #feature_map = RBFSampler(n_components=100)
+    #classifier = svm.LinearSVC(dual=False)
+    classifier = linear_model.SGDClassifier(warm_start=True)
+    # For LinearSVC, always set dual=False if number of features is less than
+    # number of data points
 
     # Hyperparameters
+    #Cs = np.logspace(-2, 2, 25)
     Cs = np.logspace(-2, 2, 5)
     gammas = np.logspace(-2, 2, 5)
     num_train = x.size
@@ -58,15 +111,32 @@ def mutual_info_bin(x, y, Hx=None, num_train=None, return_acc=False):
     outer_cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=1)
     inner_cv = RepeatedStratifiedKFold(n_splits=4, n_repeats=1)
 
-    pipe = Pipeline(steps=[('scaler', scaler), ('svc', classifer)])
-    estimator = GridSearchCV(pipe, dict(svc__C=Cs, svc__gamma=gammas),
-                             cv=inner_cv, iid=False)
-    # iid=False is default, but it throws a depracation warning unless
-    # explicitly passed to the function
+    #pipe = Pipeline(steps=[('scaler', scaler), ('svc', classifier)])
+    #estimator = GridSearchCV(pipe, dict(svc__C=Cs, svc__gamma=gammas),
+    #                         cv=inner_cv)
+    pipe = Pipeline(steps=[('scaler', scaler), ('fm', feature_map), ('svc', classifier)])
+    #estimator = GridSearchCV(pipe, dict(fm__gamma=gammas, svc__C=Cs,),
+    #                         cv=inner_cv)
+    estimator = GridSearchCV(pipe, dict(fm__gamma=gammas, svc__alpha=Cs,),
+                             cv=inner_cv)
 
+    #import warnings
+    #with warnings.catch_warnings():
+    #    warnings.filterwarnings("ignore", message="Liblinear failed to converge")
     cv_ret = cross_validate(estimator, y, x, cv=outer_cv, verbose=0,
                             return_train_score=False)
+
     acc = cv_ret['test_score'].mean()
+
+    #cv_rets = []
+    #for train, test in outer_cv.split(y, x):
+    #    classifier = linear_model.SGDClassifier(warm_start=True)
+    #    pipe = Pipeline(steps=[('scaler', scaler), ('fm', feature_map), ('svc', classifier)])
+    #    estimator = GridSearchCV(pipe, dict(fm__gamma=gammas, svc__alpha=Cs,),
+    #                             cv=inner_cv)
+    #    estimator.fit(y[train], x[train])
+    #    cv_rets.append(estimator.score(y[test], x[test]))
+    #acc = np.array(cv_rets).mean()
 
     # Compute conditional entropy of x given y, and mutual information
     Hx_y = Hb(acc)
@@ -76,6 +146,51 @@ def mutual_info_bin(x, y, Hx=None, num_train=None, return_acc=False):
     if return_acc:
         return Ixy, acc
     return Ixy
+
+
+def cond_mi(mis, Xi, Xj):
+    """
+    Compute the conditional mutual information of X_i given X_j.
+
+    Xi and Xj should be iterables.
+    """
+    Xi_U_Xj = tuple(sorted(set(Xi) | set(Xj)))
+    return max(mis[Xi_U_Xj] - mis[Xj], 0)
+
+
+def info_flow(mis, Xi, n):
+    """
+    Compute information flow for node i, given all mutual informations for a
+    particular layer. n is the number of nodes in that layer.
+    """
+    flows = []
+    for s in powerset(range(n)):
+        if Xi in s:
+            Xj = tuple(sorted(set(s) - {Xi,}))
+            flows.append(cond_mi(mis, [Xi,], Xj))
+
+    return max(flows)
+
+
+def compute_all_flows(all_mis, layer_sizes):
+    """
+    Compute all information flows from all mutual information values.
+    """
+
+    all_flows = [np.zeros(layer_size) for layer_size in layer_sizes]
+    for i, layer_size in enumerate(layer_sizes):
+        for j in range(layer_size):
+            all_flows[i][j] = info_flow(all_mis[i], j, layer_size)
+
+    return all_flows
+
+
+def weight_info_flows(all_flows, weights):
+    weighted_flows = [flows * w for flows, w in zip(all_flows[:-1], weights)]
+    # Very last layer of nodes has no outgoing edges, so all weights are 1
+    weighted_flows.append(all_flows[-1])
+
+    return weighted_flows
 
 
 if __name__ == '__main__':

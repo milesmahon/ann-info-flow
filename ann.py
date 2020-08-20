@@ -4,7 +4,6 @@ from __future__ import print_function, division
 
 import os
 import joblib
-import itertools as it
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -16,7 +15,8 @@ import torchvision
 import torchvision.transforms as transforms
 
 from data_utils import generate_data
-from info_measures import mutual_info_bin
+from info_measures import mutual_info_bin, compute_all_flows, weight_info_flows
+from utils import powerset, print_mis, print_edge_data, print_node_data
 
 
 class SimpleNet(nn.Module):
@@ -146,69 +146,78 @@ def analyze_info_flow(net, data, num_data, num_train):
         Yhat = net(X_test).numpy().flatten()
         predictions = (Yhat > 0.5)
         correct = (predictions == Y_test).sum()
-        print('Accuracy: %d%%' % (100 * correct / num_test))
+        print('Accuracy: %d%%\n' % (100 * correct / num_test))
 
         # Extract intermediate activations from the network
         Xint = [actvn.numpy() for actvn in net.activations]
 
     num_layers = len(Xint)
+    layer_sizes = [(Xint_.shape[1] if Xint_.ndim > 1 else 1) for Xint_ in Xint]
 
     z_corr = [corrcoef(Z_test[:, None], Xint[i]) for i in range(num_layers)]
-    print(z_corr)
+    print('Correlations with Z:')
+    for corr in z_corr: print(corr)
+    print()
+
+    print('Correlations with Y:')
     y_corr = [corrcoef(Y_test[:, None], Xint[i]) for i in range(num_layers)]
-    print(y_corr)
+    for corr in y_corr: print(corr)
+    print()
 
     print('Weights')
-    data = [getattr(net, 'fc%d' % i).weight.data for i in range(1, num_layers)]
-    js = [data[i].shape[0] for i in range(num_layers - 1)]
-    for j in range(max(js)):
-        for i in range(0, num_layers - 1):
-            if j >= js[i]:
-                continue
-            #if len(data[i].shape) == 1:
-            #    print('%.4f' % data[i].item())
-            #    continue
-            for k in range(data[i].shape[1]):
-                print('%.4f' % data[i][j, k].item(), end='\t')
-            print('\t', end='')
-        print()
+    weights = [getattr(net, 'fc%d' % i).weight.data.numpy()
+               for i in range(1, num_layers)]
+    print_edge_data(weights, layer_sizes)
+    print()
 
-    def powerset(iterable, start=0):
-        "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
-        s = list(iterable)
-        return it.chain.from_iterable(it.combinations(s, r)
-                                      for r in range(start, len(s)+1))
+    header = 'Layer\tX1\tX2\tX3\tX12\tX13\tX23\tX123'
 
     print('Computing bias flows...')
-    print('Layer\tX1\tX2\tX3\tX12\tX13\tX23\tX123')
+    print('Accuracies:')
+    print(header)
+    z_mis = [None,] * num_layers
     for i in range(num_layers):
         print(i, end='', flush=True)
-        if Xint[i].ndim > 1:
-            for js in powerset(list(range(Xint[i].shape[1])), start=1):
-                z_mi, z_acc = mutual_info_bin(Z_test, Xint[i][:, js], Hx=1, return_acc=True)
-                #print('\t%.4f' % z_mi, end='', flush=True)
-                print('\t%.4f' % z_acc, end='', flush=True)
-            print()
-        else:
-            z_mi, z_acc = mutual_info_bin(Z_test, Xint[i], Hx=1, return_acc=True)
-            #print(z_mi)
-            print(z_acc)
+        z_mis[i] = {(): 0}
+        if Xint[i].ndim == 1:
+            Xint[i] = Xint[i].reshape((-1, 1))
+        for js in powerset(range(layer_sizes[i]), start=1):
+            z_mi, z_acc = mutual_info_bin(Z_test, Xint[i][:, js], Hx=1, return_acc=True)
+            z_mis[i][js] = z_mi
+            print('\t%.4f' % z_acc, end='', flush=True)
+        print()
+    print('Mutual informations:')
+    print_mis(z_mis, layer_sizes, header)
+    print('Information flows:')
+    z_info_flows = compute_all_flows(z_mis, layer_sizes)
+    print_node_data(z_info_flows, layer_sizes)
+    print('Weighted information flows:')
+    z_info_flows_weighted = weight_info_flows(z_info_flows, weights)
+    print_edge_data(z_info_flows_weighted, layer_sizes)
     print()
 
     print('Computing accuracy flows...')
-    print('Layer\tX1\tX2\tX3\tX12\tX13\tX23\tX123')
+    print('Accuracies:')
+    print(header)
+    y_mis = [None,] * num_layers
     for i in range(num_layers):
         print(i, end='', flush=True)
-        if Xint[i].ndim > 1:
-            for js in powerset(list(range(Xint[i].shape[1])), start=1):
-                y_mi, y_acc = mutual_info_bin(Y_test, Xint[i][:, js], Hx=1, return_acc=True)
-                #print('\t%.4f' % y_mi, end='', flush=True)
-                print('\t%.4f' % y_acc, end='', flush=True)
-            print()
-        else:
-            y_mi, y_acc = mutual_info_bin(Y_test, Xint[i], Hx=1, return_acc=True)
-            #print(y_mi)
-            print(y_acc)
+        y_mis[i] = {(): 0}
+        if Xint[i].ndim == 1:
+            Xint[i] = Xint[i].reshape((-1, 1))
+        for js in powerset(range(layer_sizes[i]), start=1):
+            y_mi, y_acc = mutual_info_bin(Y_test, Xint[i][:, js], Hx=1, return_acc=True)
+            y_mis[i][js] = y_mi
+            print('\t%.4f' % y_acc, end='', flush=True)
+        print()
+    print('Mutual informations:')
+    print_mis(y_mis, layer_sizes, header)
+    print('Information flows:')
+    y_info_flows = compute_all_flows(y_mis, layer_sizes)
+    print_node_data(y_info_flows, layer_sizes)
+    print('Weighted information flows:')
+    y_info_flows_weighted = weight_info_flows(y_info_flows, weights)
+    print_edge_data(y_info_flows_weighted, layer_sizes)
     print()
 
     #plt.figure()
