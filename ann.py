@@ -3,6 +3,7 @@
 from __future__ import print_function, division
 
 import os
+import copy
 import joblib
 import numpy as np
 import matplotlib.pyplot as plt
@@ -182,7 +183,8 @@ def analyze_info_flow(net, data, num_data, num_train):
         if Xint[i].ndim == 1:
             Xint[i] = Xint[i].reshape((-1, 1))
         for js in powerset(range(layer_sizes[i]), start=1):
-            z_mi, z_acc = mutual_info_bin(Z_test, Xint[i][:, js], Hx=1, return_acc=True)
+            z_mi, z_acc = mutual_info_bin(Z_test, Xint[i][:, js], Hx=1,
+                                          return_acc=True)
             z_mis[i][js] = z_mi
             print('\t%.4f' % z_acc, end='', flush=True)
         print()
@@ -206,7 +208,8 @@ def analyze_info_flow(net, data, num_data, num_train):
         if Xint[i].ndim == 1:
             Xint[i] = Xint[i].reshape((-1, 1))
         for js in powerset(range(layer_sizes[i]), start=1):
-            y_mi, y_acc = mutual_info_bin(Y_test, Xint[i][:, js], Hx=1, return_acc=True)
+            y_mi, y_acc = mutual_info_bin(Y_test, Xint[i][:, js], Hx=1,
+                                          return_acc=True)
             y_mis[i][js] = y_mi
             print('\t%.4f' % y_acc, end='', flush=True)
         print()
@@ -232,6 +235,24 @@ def analyze_info_flow(net, data, num_data, num_train):
 
     #plt.show()
 
+    return (z_mis, z_info_flows, z_info_flows_weighted,
+            y_mis, y_info_flows, y_info_flows_weighted)
+
+
+def prune_edge(net, layer, i, j, prune_factor=0):
+    """
+    Prunes an edge from neuron `i` to neuron `j` at a given `layer` in `net`
+    by `prune_factor` and returns a copy.
+    """
+
+    pruned_net = SimpleNet()
+    pruned_net.load_state_dict(net.state_dict())
+    weights = copy.deepcopy(net.get_weights())
+    weights[layer][i, j] *= prune_factor
+    pruned_net.set_weights(weights)
+
+    return pruned_net
+
 
 if __name__ == '__main__':
     num_data = 2000
@@ -252,4 +273,39 @@ if __name__ == '__main__':
     #net = SimpleNet()
     #net.load_state_dict(torch.load(annfile))
 
-    analyze_info_flow(net, data, num_data, num_train)
+    #num_layers = 3
+    #layer_sizes = [3, 3, 1]
+    #print_edge_data(net.get_weights(), layer_sizes)
+    #print()
+    #pruned_net = prune_edge(net, 1, 0, 1)
+    #pruned_net = prune_edge(pruned_net, 0, 2, 2, prune_factor=0.5)
+    #pn_weights = [getattr(pruned_net, 'fc%d' % i).weight.data.numpy()
+    #              for i in range(1, num_layers)]
+    #print_edge_data(pn_weights, layer_sizes)
+    #print()
+    #print_edge_data(net.get_weights(), layer_sizes)
+
+    ret = analyze_info_flow(net, data, num_data, num_train)
+    (z_mis, z_info_flows, z_info_flows_weighted,
+     y_mis, y_info_flows, y_info_flows_weighted) = ret
+    plot_ann(net.layer_sizes, z_info_flows_weighted)
+    plt.title('Weighted flows before pruning')
+
+    print('------------------------------------------------')
+    print('After pruning')
+    print('------------------------------------------------\n')
+
+    pruned_net = prune_edge(net, 0, 0, 0)
+    pruned_net = prune_edge(pruned_net, 0, 1, 0)
+    pruned_net = prune_edge(pruned_net, 0, 2, 0)
+    pruned_net = prune_edge(pruned_net, 0, 0, 1)
+    pruned_net = prune_edge(pruned_net, 0, 1, 1)
+    pruned_net = prune_edge(pruned_net, 0, 2, 1)
+
+    ret = analyze_info_flow(pruned_net, data, num_data, num_train)
+    (z_mis, z_info_flows, z_info_flows_weighted,
+     y_mis, y_info_flows, y_info_flows_weighted) = ret
+    plot_ann(pruned_net.layer_sizes, z_info_flows_weighted)
+    plt.title('Weighted flows after pruning')
+
+    plt.show()
