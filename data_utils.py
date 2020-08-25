@@ -2,10 +2,34 @@
 
 from __future__ import print_function, division
 
+import joblib
+from types import SimpleNamespace
+
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.optimize as opt
 import scipy.special as spl
+
+
+def init_data(params, dataset=None, data=None):
+    if data is None:
+        data = SimpleNamespace()
+    if dataset is None:
+        dataset = params.default_dataset
+
+    if dataset == 'TinySCM':
+        # Load data if it exists; generate and save data otherwise
+        if params.datafile is None:
+            data.data = generate_data(params.num_data)
+            print('Data generation complete')
+            #joblib.dump(data, datafile, compress=3)
+        else:
+            data.data = joblib.load(params.datafile)
+
+    else:
+        raise ValueError('Unknown dataset %s' % dataset)
+
+    return data
 
 
 def compute_y(uy, ug, alpha=1, offset=0):

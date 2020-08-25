@@ -6,7 +6,31 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def plot_ann(layer_sizes, weights, params=None, ax=None):
+def init_plots(vis):
+    # Initialize the plotting axes and add them to the namespace
+    vis.fig = plt.figure(figsize=(15, 5))
+
+    vis.fig.canvas.toolbar_visible = False
+    vis.fig.canvas.header_visible = False
+    vis.fig.canvas.footer_visible = False
+    vis.fig.canvas.resizable = False
+
+    vis.ax_weights = vis.fig.add_subplot(1, 3, 1, aspect='equal')
+    vis.ax_weights.set_axis_off()
+    vis.ax_weights.set_title('ANN Weights')
+
+    vis.ax_bias_flows = vis.fig.add_subplot(1, 3, 2, aspect='equal')
+    vis.ax_bias_flows.set_axis_off()
+    vis.ax_bias_flows.set_title('Weighted Bias Flows')
+
+    vis.ax_acc_flows = vis.fig.add_subplot(1, 3, 3, aspect='equal')
+    vis.ax_acc_flows.set_axis_off()
+    vis.ax_acc_flows.set_title('Weighted Accuracy Flows')
+
+    plt.tight_layout()
+
+
+def plot_ann(layer_sizes, weights, plot_params=None, ax=None):
     """
     Plots a visualization of a trained neural network with given weights.
 
@@ -18,9 +42,9 @@ def plot_ann(layer_sizes, weights, params=None, ax=None):
         plt.figure(figsize=(6, 6))
         ax = plt.gca()
         plt.axis('off')
-    if params is None:
-        params = (0.1, 0.9, 0.9, 0.1)
-    left, right, top, bottom = params
+    if plot_params is None:
+        plot_params = (0.1, 0.9, 0.9, 0.1)
+    left, right, top, bottom = plot_params
 
     num_layers = len(layer_sizes)
     v_spacing = (top - bottom) / max(layer_sizes)
