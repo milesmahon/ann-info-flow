@@ -10,7 +10,8 @@ import matplotlib.pyplot as plt
 import torch
 
 from data_utils import generate_data
-from info_measures import mutual_info_bin, compute_all_flows, weight_info_flows
+from info_measures import (mutual_info_bin, compute_all_flows,
+                           weight_info_flows, acc_from_mi)
 from utils import powerset, print_mis, print_edge_data, print_node_data
 from nn import SimpleNet, train_ann
 from plot_utils import plot_ann
@@ -54,7 +55,8 @@ def analyze_info_flow(net, data, num_data, num_train):
         Yhat = net(X_test).numpy().flatten()
         predictions = (Yhat > 0.5)
         correct = (predictions == Y_test).sum()
-        print('Accuracy: %d%%\n' % (100 * correct / num_test))
+        accuracy = correct / num_test
+        print('Accuracy: %d%%\n' % (100 * accuracy))
 
         # Extract intermediate activations from the network
         Xint = [actvn.numpy() for actvn in net.activations]
@@ -143,7 +145,8 @@ def analyze_info_flow(net, data, num_data, num_train):
     #plt.show()
 
     return (z_mis, z_info_flows, z_info_flows_weighted,
-            y_mis, y_info_flows, y_info_flows_weighted)
+            y_mis, y_info_flows, y_info_flows_weighted,
+            accuracy)
 
 
 def prune_edge(net, layer, i, j, prune_factor=0):
@@ -192,27 +195,53 @@ if __name__ == '__main__':
     #print()
     #print_edge_data(net.get_weights(), layer_sizes)
 
-    ret = analyze_info_flow(net, data, num_data, num_train)
-    (z_mis, z_info_flows, z_info_flows_weighted,
-     y_mis, y_info_flows, y_info_flows_weighted) = ret
-    plot_ann(net.layer_sizes, z_info_flows_weighted)
-    plt.title('Weighted flows before pruning')
+    #ret = analyze_info_flow(net, data, num_data, num_train)
+    #(z_mis, z_info_flows, z_info_flows_weighted,
+    # y_mis, y_info_flows, y_info_flows_weighted, acc_before) = ret
+    #plot_ann(net.layer_sizes, z_info_flows_weighted)
+    #plt.title('Weighted flows before pruning')
+    #plt.savefig('figures/before.png' % pf)
+    #plt.close()
 
-    print('------------------------------------------------')
-    print('After pruning')
-    print('------------------------------------------------\n')
+    accs = []
+    rets = []
+    biases = []
+    pfs = np.linspace(0, 1, 11)
+    for pf in pfs:
+        #pf = 0.5  # Prune factor (0 = edge removal; 1 = no pruning)
 
-    pruned_net = prune_edge(net, 0, 0, 0)
-    pruned_net = prune_edge(pruned_net, 0, 1, 0)
-    pruned_net = prune_edge(pruned_net, 0, 2, 0)
-    pruned_net = prune_edge(pruned_net, 0, 0, 1)
-    pruned_net = prune_edge(pruned_net, 0, 1, 1)
-    pruned_net = prune_edge(pruned_net, 0, 2, 1)
+        #print('------------------------------------------------')
+        #print('After pruning')
+        #print('------------------------------------------------\n')
 
-    ret = analyze_info_flow(pruned_net, data, num_data, num_train)
-    (z_mis, z_info_flows, z_info_flows_weighted,
-     y_mis, y_info_flows, y_info_flows_weighted) = ret
-    plot_ann(pruned_net.layer_sizes, z_info_flows_weighted)
-    plt.title('Weighted flows after pruning')
+        print('------------------------------------------------')
+        print('Prune factor: %g' % pf)
+        print('------------------------------------------------\n')
 
-    plt.show()
+        pruned_net = prune_edge(net, 0, 0, 0, prune_factor=pf)
+        pruned_net = prune_edge(pruned_net, 0, 1, 0, prune_factor=pf)
+        pruned_net = prune_edge(pruned_net, 0, 2, 0, prune_factor=pf)
+        pruned_net = prune_edge(pruned_net, 0, 0, 1, prune_factor=pf)
+        pruned_net = prune_edge(pruned_net, 0, 1, 1, prune_factor=pf)
+        pruned_net = prune_edge(pruned_net, 0, 2, 1, prune_factor=pf)
+
+        ret = analyze_info_flow(pruned_net, data, num_data, num_train)
+        (z_mis, z_info_flows, z_info_flows_weighted,
+         y_mis, y_info_flows, y_info_flows_weighted, acc) = ret
+
+        plot_ann(pruned_net.layer_sizes, z_info_flows_weighted)
+        plt.title('Weighted flows after pruning')
+        plt.savefig('figures/weighted-flows-pf%g.png' % pf)
+
+        accs.append(acc)
+        rets.append(ret)
+        biases.append(acc_from_mi(z_mis[2][(0,)]))
+        #plt.show()
+
+    np.savez_compressed('acc-bias-tradeoff.npz', accs=np.array(accs),
+                        biases=np.array(biases))
+    joblib.dump(rets, 'all-outputs.pkl', compress=3)
+
+    plt.figure()
+    plt.plot(biases, accs)
+    plt.savefig('figures/bias-acc-tradeoff.png')

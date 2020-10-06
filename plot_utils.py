@@ -85,12 +85,30 @@ def plot_ann(layer_sizes, weights, plot_params=None, ax=None):
 
 if __name__ == '__main__':
     layer_sizes = [3, 3, 1]
+    #weights = [
+    #    np.array([[-0.6317, -0.7838, -2.1873],
+    #              [ 0.6223,  0.8153,  0.8304],
+    #              [-0.7554, -1.1385, -1.7987]]),
+    #    np.array([-2.2715, 1.4479, -2.2133])
+    #]
+
+    # Before pruning
+    #weights = [
+    #    np.array([[-0.3422, -0.1095, -0.0066],
+    #              [-0.0942, -0.0161, -0.0031],
+    #              [ 0.2084,  0.1570,  0.0104]]),
+    #    np.array([-0.4382, -0.0746,  0.2808])
+    #]
+    #weights = [abs(w) for w in weights]
+
+    # After pruning
     weights = [
-        np.array([[-0.6317, -0.7838, -2.1873],
-                  [ 0.6223,  0.8153,  0.8304],
-                  [-0.7554, -1.1385, -1.7987]]),
-        np.array([-2.2715, 1.4479, -2.2133])
+        np.array([[-0.0350, -0.0109, -0.0022],
+                  [-0.0096, -0.0016, -0.0011],
+                  [ 0.0213,  0.0156,  0.0035]]),
+        np.array([-0.2771, -0.0849, 0.2112])
     ]
+    weights = [abs(w) for w in weights]
 
     plot_ann(layer_sizes, weights)
     plt.show()

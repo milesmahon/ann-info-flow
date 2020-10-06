@@ -92,7 +92,7 @@ def generate_data(n):
 
 
 if __name__ == '__main__':
-    n = 500
+    n = 1000
     z, (uy, ug), (x1, x2, x3), y = generate_data(n)
 
     y1 = (y == 1)
@@ -113,6 +113,10 @@ if __name__ == '__main__':
     #plt.figure()
     #for mask, p in zip(mask_combinations, params):
     #    plt.plot(x2[mask], x3[mask], 'o', alpha=0.3, **p)
+
+    plt.figure()
+    plt.plot(uy[y == 1], ug[y == 1], 'C0o', alpha=0.4)
+    plt.plot(uy[y == 0], ug[y == 0], 'C1o', alpha=0.4)
 
     plt.figure()
     plt.plot(uy[z == 1], x1[z == 1], 'C0o', alpha=0.3)
