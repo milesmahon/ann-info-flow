@@ -22,14 +22,19 @@ class SimpleNet(nn.Module):
         """Initializes a neural network with one hidden layer."""
         super(SimpleNet, self).__init__()
         self.fc1 = nn.Linear(3, 3)
-        self.fc2 = nn.Linear(3, 1)
+        #self.fc2 = nn.Linear(3, 1)  # Thresholded encoding of 0/1
+        self.fc2 = nn.Linear(3, 2)  # 1-hot encoding of 0/1
         self.num_layers = 3  # Includes input and output layer
-        self.layer_sizes = [3, 3, 1]
+        #self.layer_sizes = [3, 3, 1]
+        self.layer_sizes = [3, 3, 2]
 
     def forward(self, x):
         x0 = x.view(-1, 3)
-        x1 = torch.sigmoid(self.fc1(x0))
-        x2 = torch.sigmoid(self.fc2(x1))
+        leaky_relu = nn.LeakyReLU()
+        #x1 = torch.sigmoid(self.fc1(x0))
+        #x2 = torch.sigmoid(self.fc2(x1))
+        x1 = leaky_relu(self.fc1(x0))
+        x2 = leaky_relu(self.fc2(x1))
         self.activations = [x0, x1, x2]
         return x2
 
@@ -42,34 +47,35 @@ class SimpleNet(nn.Module):
             getattr(self, 'fc%d' % (i + 1)).weight.data.numpy()[:, :] = w
 
 
-def train_ann(data, num_data, num_train, test=False, savefile=None):
+def train_ann(data, params, test=False, savefile=None):
     # TODO: Implement early stopping
 
-    X, Y = data[2:]
-    X = torch.from_numpy(np.array(X).T).float()
-    Y = torch.from_numpy(np.array(Y).reshape((-1, 1))).float()
+    X, Y = data.data[:2]
+    X = torch.from_numpy(np.array(X)).float()
+    #Y = torch.from_numpy(np.array(Y).reshape((-1, 1))).float()
+    Y = torch.from_numpy(np.array(Y).reshape((-1, 1))).long()
 
     # Separate training and testing data
-    X_train = X[:num_train]
-    Y_train = Y[:num_train]
+    X_train = X[:params.num_train]
+    Y_train = Y[:params.num_train]
 
     # Training parameters
-    num_epochs = 10
-    minibatch_size = 10  # Should be a factor of num_train
-    learning_rate = 0.1
-    momentum = 0.9
-    print_every = num_train // minibatch_size // 10
+    num_epochs = params.num_epochs[data.dataset]
+    minibatch_size = params.minibatch_size[data.dataset]
+    learning_rate = params.learning_rate[data.dataset]
+    momentum = params.momentum[data.dataset]
+    print_every = (params.num_train // minibatch_size
+                   // params.print_every_factor[data.dataset])
 
     # Set up neural network, loss function and optimizer
     net = SimpleNet()
-    criterion = nn.MSELoss()
-    #criterion = nn.CrossEntropyLoss()
+    criterion = params.criterion[data.dataset]
     optimizer = optim.SGD(net.parameters(), lr=learning_rate, momentum=momentum)
 
     for epoch in range(num_epochs):
         running_loss = 0.0
 
-        for i in range(num_train // minibatch_size):
+        for i in range(params.num_train // minibatch_size):
             # Get minibatch from training data
             x = X_train[i*minibatch_size : (i+1)*minibatch_size, :]
             y = Y_train[i*minibatch_size : (i+1)*minibatch_size, :]
@@ -79,7 +85,7 @@ def train_ann(data, num_data, num_train, test=False, savefile=None):
 
             # Compute loss on x, backprop, and take a gradient step
             yhat = net(x)
-            loss = criterion(yhat, y)
+            loss = criterion(torch.squeeze(yhat), torch.squeeze(y))
             loss.backward()
             optimizer.step()
 
@@ -96,9 +102,9 @@ def train_ann(data, num_data, num_train, test=False, savefile=None):
         torch.save(net.state_dict(), savefile)
 
     if test:
-        num_test = num_data - num_train
-        X_test = X[num_train:]
-        Y_test = Y[num_train:]
+        num_test = params.num_data - params.num_train
+        X_test = X[params.num_train:]
+        Y_test = Y[params.num_train:]
 
         with torch.no_grad():
             Yhat = net(X_test)

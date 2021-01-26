@@ -3,3 +3,5 @@ old/
 *.pkl
 *.sav
 .ipynb_checkpoints/
+results*
+figures*

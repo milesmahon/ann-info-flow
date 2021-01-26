@@ -6,6 +6,7 @@ import joblib
 from types import SimpleNamespace
 
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import scipy.optimize as opt
 import scipy.special as spl
@@ -16,15 +17,67 @@ def init_data(params, dataset=None, data=None):
         data = SimpleNamespace()
     if dataset is None:
         dataset = params.default_dataset
+    data.dataset = dataset
 
-    if dataset == 'TinySCM':
+    if dataset == 'tinyscm':
         # Load data if it exists; generate and save data otherwise
-        if params.datafile is None:
+        if params.datafile is None or params.force_regenerate:
             data.data = generate_data(params.num_data)
             print('Data generation complete')
-            #joblib.dump(data, datafile, compress=3)
+            if params.datafile is not None:
+                joblib.dump(data.data, params.datafile, compress=3)
         else:
             data.data = joblib.load(params.datafile)
+
+    elif dataset == 'adult':
+        # Uncomment for original number of training and test points
+        # num_train = 32561 (prime number) and num_data = 48842 (2 * prime number)
+        d = pd.read_csv('adult-dataset-cleaned.csv')
+        params.num_train = d.shape[0]
+        d = d.append(pd.read_csv('adult-test-dataset-cleaned.csv'))
+        params.num_data = d.shape[0]
+
+        # Neglect last few data points to get more manageable numbers
+        # We use 32k training points, and 16k test points from the respective
+        # datasets, for a total of 48k data points
+        #d = pd.read_csv('adult-dataset-cleaned.csv')[:32000]
+        #params.num_train = d.shape[0]
+        #d = d.append(pd.read_csv('adult-test-dataset-cleaned.csv')[:16000])
+        #params.num_data = d.shape[0]
+
+        d['race-num'] = (d['race'] == 'White').astype(int)     # B=0; W=1
+        d['sex-num'] = (d['sex'] == 'Female').astype(int)      # M=0; F=1
+        d['income-num'] = (d['income'] == '>50K').astype(int)  # <50K=0; >50K=1
+        X = d[['age', 'education-num', 'hours-per-week']].to_numpy()
+        Y = d['income-num'].to_numpy()
+        Z = d[['race-num', 'sex-num']].to_numpy()
+
+        # Choose a balanced sample of output classes
+        class_inds = [np.where((Y == 0) & (Z[:, 1] == 0))[0],  # Men, <50K
+                      np.where((Y == 1) & (Z[:, 1] == 0))[0],  # Men, >50K
+                      np.where((Y == 0) & (Z[:, 1] == 1))[0],  # Women, <50K
+                      np.where((Y == 1) & (Z[:, 1] == 1))[0]]  # Women, >50K
+
+        weights = np.array([1, 2, 2, 1], dtype=float)
+        class_sizes = np.array([class_ind.size for class_ind in class_inds])
+        min_ind = np.argmin(class_sizes / weights)
+        min_class_size = class_sizes[min_ind]
+        weights /= weights[min_ind]
+
+        rng = np.random.default_rng(42)
+        inds = [rng.choice(class_ind, size=int(weight * min_class_size),
+                           replace=False, shuffle=False)
+                for weight, class_ind in zip(weights, class_inds)]
+        inds = np.concatenate(inds)
+        rng.shuffle(inds)
+        inds_trunc = inds[:(inds.size // 20) * 20]
+        X = X[inds_trunc, :]
+        Y = Y[inds_trunc]
+        Z = Z[inds_trunc, :]
+        params.num_data = inds_trunc.size
+        params.num_train = inds_trunc.size // 2
+
+        data.data = (X, Y, Z)
 
     else:
         raise ValueError('Unknown dataset %s' % dataset)
@@ -78,6 +131,7 @@ def generate_data(n):
     # Scaled and centered uniform distribution
     #uy = np.random.rand(n) * 4 - 2
     #ug = np.random.rand(n) * 4 - 2
+    u = np.array([uy, ug]).T
 
     z = (np.random.rand(n) < 0.5).astype(int)
 
@@ -86,14 +140,16 @@ def generate_data(n):
     x1 = compute_x_biased(uy, z, 0.7, 0.0, 0.2)
     x2 = compute_x_biased(uy, z, 0.5, 0.0, 0.2)
     x3 = compute_x_biased(ug, z, 0.1, 0.1, 0.2)  # No bias
+    x = np.array([x1, x2, x3]).T
 
-    # Return z, u, x, y
-    return z, (uy, ug), (x1, x2, x3), y
+    return x, y, z, u
 
 
 if __name__ == '__main__':
     n = 1000
-    z, (uy, ug), (x1, x2, x3), y = generate_data(n)
+    x, y, z, u = generate_data(n)
+    (x1, x2, x3) = x.T
+    (uy, ug) = u.T
 
     y1 = (y == 1)
     y0 = ~y1
@@ -115,20 +171,26 @@ if __name__ == '__main__':
     #    plt.plot(x2[mask], x3[mask], 'o', alpha=0.3, **p)
 
     plt.figure()
+    plt.plot(np.linspace(1/4, 4, 100) - 1, 1 / np.linspace(1/4, 4, 100) - 1, 'k-')
     plt.plot(uy[y == 1], ug[y == 1], 'C0o', alpha=0.4)
     plt.plot(uy[y == 0], ug[y == 0], 'C1o', alpha=0.4)
+    plt.xlabel('$U_Y$', fontsize=18)
+    plt.ylabel('$U_G$', fontsize=18)
+    plt.legend(('True boundary', '$Y=1$', '$Y=0$'), loc='lower left', fontsize=14)
 
     plt.figure()
     plt.plot(uy[z == 1], x1[z == 1], 'C0o', alpha=0.3)
     plt.plot(uy[z == 0], x1[z == 0], 'C1o', alpha=0.3)
     plt.xlabel('$U_Y$', fontsize=18)
     plt.ylabel('$X_1$', fontsize=18)
+    plt.legend(('$Z=1$', '$Z=0$'), loc='best', fontsize=14)
 
     plt.figure()
     plt.plot(uy[z == 1], x2[z == 1], 'C0o', alpha=0.3)
     plt.plot(uy[z == 0], x2[z == 0], 'C1o', alpha=0.3)
     plt.xlabel('$U_Y$', fontsize=18)
     plt.ylabel('$X_2$', fontsize=18)
+    plt.legend(('$Z=1$', '$Z=0$'), loc='best', fontsize=14)
 
     plt.figure()
     plt.plot(ug, x3, 'C0o', alpha=0.3)

@@ -9,7 +9,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 
-from data_utils import generate_data
+from param_utils import init_params
+from data_utils import init_data, generate_data
 from info_measures import (mutual_info_bin, compute_all_flows,
                            weight_info_flows, acc_from_mi)
 from utils import powerset, print_mis, print_edge_data, print_node_data
@@ -32,31 +33,32 @@ def corrcoef(x, y):
     return cov / (sigma_x[:, None] * sigma_y)
 
 
-def analyze_info_flow(net, data, num_data, num_train):
-    Z, U, X, Y = data
-    Z = np.array(Z)
-    U = np.array(U).T
-    X = np.array(X).T
+def analyze_info_flow(net, data, params): #num_data, num_train):
+    X, Y, Z = data.data[:3]
+    #Z = np.array(Z)        # Tiny SCM: only one protected attribute
+    Z = np.array(Z)[:, 1]  # Adult dataset: 0 for race; 1 for gender
+    X = np.array(X)
     Y = np.array(Y)
 
-    Z_test = Z[num_train:]
-    U_test = U[num_train:]
-    Y_test = Y[num_train:]
+    Z_test = Z[params.num_train:]
+    Y_test = Y[params.num_train:]
 
     # PyTorch stuff
     with torch.no_grad():
         X_ = torch.from_numpy(X).float()
         Y_ = torch.from_numpy(np.array(Y).reshape((-1, 1))).float()
 
-        num_test = num_data - num_train
-        X_test = X_[num_train:]
+        num_test = params.num_data - params.num_train
+        X_test = X_[params.num_train:]
 
         # Compute and print test accuracy
-        Yhat = net(X_test).numpy().flatten()
-        predictions = (Yhat > 0.5)
+        Yhat = np.squeeze(net(X_test).numpy())
+        #predictions = (Yhat > 0.5)  # Logic for single output node encoding 0/1 using a sigmoid
+        predictions = (Yhat[:, 0] < Yhat[:, 1]).astype(int)  # Logic for 1-hot encoding of 0/1 at output node
         correct = (predictions == Y_test).sum()
         accuracy = correct / num_test
-        print('Accuracy: %d%%\n' % (100 * accuracy))
+
+        print('Accuracy: %.5g%%\n' % (100 * accuracy))
 
         # Extract intermediate activations from the network
         Xint = [actvn.numpy() for actvn in net.activations]
@@ -165,23 +167,19 @@ def prune_edge(net, layer, i, j, prune_factor=0):
 
 
 if __name__ == '__main__':
-    num_data = 2000
-    #force_regenerate = False
-    force_regenerate = True
-    datafile = 'data-%d.pkl' % num_data
-    # Load data if it exists; generate and save data otherwise
-    if force_regenerate or not os.path.isfile(datafile):
-        data = generate_data(num_data)
-        print('Data generation complete')
-        joblib.dump(data, datafile, compress=3)
-    else:
-        data = joblib.load(datafile)
+    params = init_params()
+    #params.force_regenerate = True  # Only relevant for tinyscm
+    params.force_retrain = True
 
-    num_train = 1000
-    annfile = 'nn-state.sav'
-    net = train_ann(data, num_data, num_train, test=False, savefile=annfile)
-    #net = SimpleNet()
-    #net.load_state_dict(torch.load(annfile))
+    #data = init_data(params, dataset='tinyscm')
+    data = init_data(params, dataset='adult')
+    print(params.num_data, params.num_train)
+
+    if params.force_retrain or params.annfile is None:
+        net = train_ann(data, params, test=False, savefile=params.annfile)
+    else:
+        net = SimpleNet()
+        net.load_state_dict(torch.load(params.annfile))
 
     #num_layers = 3
     #layer_sizes = [3, 3, 1]
@@ -206,7 +204,8 @@ if __name__ == '__main__':
     accs = []
     rets = []
     biases = []
-    pfs = np.linspace(0, 1, 11)
+    pfs = [1,]
+    #pfs = np.linspace(0, 1, 11)
     for pf in pfs:
         #pf = 0.5  # Prune factor (0 = edge removal; 1 = no pruning)
 
@@ -225,7 +224,7 @@ if __name__ == '__main__':
         pruned_net = prune_edge(pruned_net, 0, 1, 1, prune_factor=pf)
         pruned_net = prune_edge(pruned_net, 0, 2, 1, prune_factor=pf)
 
-        ret = analyze_info_flow(pruned_net, data, num_data, num_train)
+        ret = analyze_info_flow(pruned_net, data, params)
         (z_mis, z_info_flows, z_info_flows_weighted,
          y_mis, y_info_flows, y_info_flows_weighted, acc) = ret
 
@@ -238,9 +237,9 @@ if __name__ == '__main__':
         biases.append(acc_from_mi(z_mis[2][(0,)]))
         #plt.show()
 
-    np.savez_compressed('acc-bias-tradeoff.npz', accs=np.array(accs),
+    np.savez_compressed('results/acc-bias-tradeoff.npz', accs=np.array(accs),
                         biases=np.array(biases))
-    joblib.dump(rets, 'all-outputs.pkl', compress=3)
+    joblib.dump(rets, 'results/all-outputs.pkl', compress=3)
 
     plt.figure()
     plt.plot(biases, accs)
