@@ -60,7 +60,7 @@ def init_data(params, dataset=None, data=None):
 
         # Set relative sizes of each class in the train and test sets
         train_weights = np.array([1, 2, 2, 1], dtype=float)
-        test_weights = np.array([1, 1, 1, 1], dtype=float)
+        test_weights = np.array([1, 2, 2, 1], dtype=float)
         weights = train_weights + test_weights
         class_sizes = np.array([class_ind.size for class_ind in class_inds])
         min_ind = np.argmin(class_sizes / weights)
@@ -90,9 +90,16 @@ def init_data(params, dataset=None, data=None):
         # Should NOT shuffle after this! We need to maintain the individual
         # statistics of the train and test sets
 
-        X = X[inds_trunc, :]
+        X = X[inds_trunc, :].astype(float)
         Y = Y[inds_trunc]
         Z = Z[inds_trunc, :]
+
+        # Standardize features
+        # XXX: This isn't the best way to standardize, because we are making
+        # the training and test data points slightly dependent on each other
+        X -= X.mean(axis=0)
+        X /= X.std(axis=0)
+
         params.num_data = inds_trunc.size
         params.num_train = train_inds_trunc.size
 
