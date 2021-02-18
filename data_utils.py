@@ -58,24 +58,43 @@ def init_data(params, dataset=None, data=None):
                       np.where((Y == 0) & (Z[:, 1] == 1))[0],  # Women, <50K
                       np.where((Y == 1) & (Z[:, 1] == 1))[0]]  # Women, >50K
 
-        weights = np.array([1, 2, 2, 1], dtype=float)
+        # Set relative sizes of each class in the train and test sets
+        train_weights = np.array([1, 2, 2, 1], dtype=float)
+        test_weights = np.array([1, 1, 1, 1], dtype=float)
+        weights = train_weights + test_weights
         class_sizes = np.array([class_ind.size for class_ind in class_inds])
         min_ind = np.argmin(class_sizes / weights)
         min_class_size = class_sizes[min_ind]
-        weights /= weights[min_ind]
+        norm_factor = weights[min_ind]
+        weights /= norm_factor
+        train_weights /= norm_factor
+        test_weights /= norm_factor
 
+        # Choose required number of train and test indices
         rng = np.random.default_rng(42)
         inds = [rng.choice(class_ind, size=int(weight * min_class_size),
                            replace=False, shuffle=False)
                 for weight, class_ind in zip(weights, class_inds)]
-        inds = np.concatenate(inds)
-        rng.shuffle(inds)
-        inds_trunc = inds[:(inds.size // 20) * 20]
+        # Select required number of train indices from this set
+        train_inds = [ind[:int(train_weight * min_class_size)]
+                      for train_weight, ind in zip(train_weights, inds)]
+        test_inds = [ind[int(train_weight * min_class_size):]
+                     for train_weight, ind in zip(train_weights, inds)]
+        # Concatenate, round off, and shuffle
+        train_inds = np.concatenate(train_inds)
+        train_inds_trunc = train_inds[:(train_inds.size // 10) * 10]
+        test_inds = np.concatenate(test_inds)
+        test_inds_trunc = test_inds[:(test_inds.size // 10) * 10]
+
+        inds_trunc = np.concatenate((train_inds_trunc, test_inds_trunc))
+        # Should NOT shuffle after this! We need to maintain the individual
+        # statistics of the train and test sets
+
         X = X[inds_trunc, :]
         Y = Y[inds_trunc]
         Z = Z[inds_trunc, :]
         params.num_data = inds_trunc.size
-        params.num_train = inds_trunc.size // 2
+        params.num_train = train_inds_trunc.size
 
         data.data = (X, Y, Z)
 

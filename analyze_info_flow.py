@@ -13,6 +13,7 @@ from param_utils import init_params
 from data_utils import init_data, generate_data
 from info_measures import (mutual_info_bin, compute_all_flows,
                            weight_info_flows, acc_from_mi)
+from pruning import prune_nodes_biasacc
 from utils import powerset, print_mis, print_edge_data, print_node_data
 from nn import SimpleNet, train_ann
 from plot_utils import plot_ann
@@ -35,10 +36,12 @@ def corrcoef(x, y):
 
 def analyze_info_flow(net, data, params): #num_data, num_train):
     X, Y, Z = data.data[:3]
-    #Z = np.array(Z)        # Tiny SCM: only one protected attribute
-    Z = np.array(Z)[:, 1]  # Adult dataset: 0 for race; 1 for gender
     X = np.array(X)
     Y = np.array(Y)
+    if data.dataset == 'adult': # Adult dataset: 0 for race; 1 for gender
+        Z = np.array(Z)[:, 1]
+    else:                       # Others (incl Tiny SCM): only one protected attr
+        Z = np.array(Z)
 
     Z_test = Z[params.num_train:]
     Y_test = Y[params.num_train:]
@@ -52,6 +55,7 @@ def analyze_info_flow(net, data, params): #num_data, num_train):
         X_test = X_[params.num_train:]
 
         # Compute and print test accuracy
+        net.eval()
         Yhat = np.squeeze(net(X_test).numpy())
         #predictions = (Yhat > 0.5)  # Logic for single output node encoding 0/1 using a sigmoid
         predictions = (Yhat[:, 0] < Yhat[:, 1]).astype(int)  # Logic for 1-hot encoding of 0/1 at output node
@@ -93,7 +97,7 @@ def analyze_info_flow(net, data, params): #num_data, num_train):
         z_mis[i] = {(): 0}
         if Xint[i].ndim == 1:
             Xint[i] = Xint[i].reshape((-1, 1))
-        for js in powerset(range(layer_sizes[i]), start=1):
+        for js in powerset(range(layer_sizes[i]), start=1):  # start=1 avoids the empty set
             z_mi, z_acc = mutual_info_bin(Z_test, Xint[i][:, js], Hx=1,
                                           return_acc=True)
             z_mis[i][js] = z_mi
@@ -151,29 +155,35 @@ def analyze_info_flow(net, data, params): #num_data, num_train):
             accuracy)
 
 
-def prune_edge(net, layer, i, j, prune_factor=0):
-    """
-    Prunes an edge from neuron `i` to neuron `j` at a given `layer` in `net`
-    by `prune_factor` and returns a copy.
-    """
-
-    pruned_net = SimpleNet()
-    pruned_net.load_state_dict(net.state_dict())
-    weights = copy.deepcopy(net.get_weights())
-    weights[layer][i, j] *= prune_factor
-    pruned_net.set_weights(weights)
-
-    return pruned_net
-
-
 if __name__ == '__main__':
     params = init_params()
     #params.force_regenerate = True  # Only relevant for tinyscm
-    params.force_retrain = True
+    #params.force_retrain = True
+    #params.force_reanalyze = True
 
     #data = init_data(params, dataset='tinyscm')
     data = init_data(params, dataset='adult')
     print(params.num_data, params.num_train)
+
+    # Check data statistics
+    X, Y, Z = data.data[:3]
+    X = np.array(X)
+    Y = np.array(Y)
+    if data.dataset == 'adult': # Adult dataset: 0 for race; 1 for gender
+        Z = np.array(Z)[:, 1]
+    else:                       # Others (incl Tiny SCM): only one protected attr
+        Z = np.array(Z)
+
+    class_inds = [np.where((Y[:params.num_train] == 0) & (Z[:params.num_train] == 0))[0],  # Men, <50K
+                  np.where((Y[:params.num_train] == 1) & (Z[:params.num_train] == 0))[0],  # Men, >50K
+                  np.where((Y[:params.num_train] == 0) & (Z[:params.num_train] == 1))[0],  # Women, <50K
+                  np.where((Y[:params.num_train] == 1) & (Z[:params.num_train] == 1))[0]]  # Women, >50K
+    print([ci.size for ci in class_inds])
+    class_inds = [np.where((Y[params.num_train:] == 0) & (Z[params.num_train:] == 0))[0],  # Men, <50K
+                  np.where((Y[params.num_train:] == 1) & (Z[params.num_train:] == 0))[0],  # Men, >50K
+                  np.where((Y[params.num_train:] == 0) & (Z[params.num_train:] == 1))[0],  # Women, <50K
+                  np.where((Y[params.num_train:] == 1) & (Z[params.num_train:] == 1))[0]]  # Women, >50K
+    print([ci.size for ci in class_inds])
 
     if params.force_retrain or params.annfile is None:
         net = train_ann(data, params, test=False, savefile=params.annfile)
@@ -181,66 +191,54 @@ if __name__ == '__main__':
         net = SimpleNet()
         net.load_state_dict(torch.load(params.annfile))
 
-    #num_layers = 3
-    #layer_sizes = [3, 3, 1]
-    #print_edge_data(net.get_weights(), layer_sizes)
-    #print()
-    #pruned_net = prune_edge(net, 1, 0, 1)
-    #pruned_net = prune_edge(pruned_net, 0, 2, 2, prune_factor=0.5)
-    #pn_weights = [getattr(pruned_net, 'fc%d' % i).weight.data.numpy()
-    #              for i in range(1, num_layers)]
-    #print_edge_data(pn_weights, layer_sizes)
-    #print()
-    #print_edge_data(net.get_weights(), layer_sizes)
-
-    #ret = analyze_info_flow(net, data, num_data, num_train)
+    # Analyze the network before pruning
+    if params.force_reanalyze or params.analysis_file is None:
+        ret_before = analyze_info_flow(net, data, params)
+        joblib.dump(ret_before, params.analysis_file, compress=3)
+    else:
+        ret_before = joblib.load(params.analysis_file)
     #(z_mis, z_info_flows, z_info_flows_weighted,
-    # y_mis, y_info_flows, y_info_flows_weighted, acc_before) = ret
-    #plot_ann(net.layer_sizes, z_info_flows_weighted)
-    #plt.title('Weighted flows before pruning')
-    #plt.savefig('figures/before.png' % pf)
-    #plt.close()
+    # y_mis, y_info_flows, y_info_flows_weighted, acc) = ret_before
+    plot_ann(net.layer_sizes, ret_before[2])
+    plt.title('Weighted flows before pruning')
+    plt.savefig('figures/weighted-flows-before.png')
+    plt.close()
 
     accs = []
     rets = []
     biases = []
-    pfs = [1,]
-    #pfs = np.linspace(0, 1, 11)
+    #pfs = [1,]
+    pfs = np.linspace(0, 1, 10, endpoint=False)
+    num_to_prune = 1
     for pf in pfs:
-        #pf = 0.5  # Prune factor (0 = edge removal; 1 = no pruning)
-
-        #print('------------------------------------------------')
-        #print('After pruning')
-        #print('------------------------------------------------\n')
-
         print('------------------------------------------------')
         print('Prune factor: %g' % pf)
         print('------------------------------------------------\n')
 
-        pruned_net = prune_edge(net, 0, 0, 0, prune_factor=pf)
-        pruned_net = prune_edge(pruned_net, 0, 1, 0, prune_factor=pf)
-        pruned_net = prune_edge(pruned_net, 0, 2, 0, prune_factor=pf)
-        pruned_net = prune_edge(pruned_net, 0, 0, 1, prune_factor=pf)
-        pruned_net = prune_edge(pruned_net, 0, 1, 1, prune_factor=pf)
-        pruned_net = prune_edge(pruned_net, 0, 2, 1, prune_factor=pf)
+        pruned_net = prune_nodes_biasacc(net, ret_before[1], ret_before[4],
+                                         num_nodes=num_to_prune, prune_factor=pf)
 
         ret = analyze_info_flow(pruned_net, data, params)
         (z_mis, z_info_flows, z_info_flows_weighted,
          y_mis, y_info_flows, y_info_flows_weighted, acc) = ret
 
         plot_ann(pruned_net.layer_sizes, z_info_flows_weighted)
-        plt.title('Weighted flows after pruning')
+        plt.title('Prune factor: %g' % pf)
         plt.savefig('figures/weighted-flows-pf%g.png' % pf)
 
-        accs.append(acc)
         rets.append(ret)
-        biases.append(acc_from_mi(z_mis[2][(0,)]))
-        #plt.show()
+
+        #accs.append(acc)  # Raw accuracy from the neural network itself
+        #accs.append(acc_from_mi(y_mis[2][(0,)]))  # If using a single output node
+        accs.append(acc_from_mi(y_mis[2][(0, 1)]))  # If using a 1-hot encoded output
+
+        #biases.append(acc_from_mi(z_mis[2][(0,)]))  # If using a single output node
+        biases.append(acc_from_mi(z_mis[2][(0, 1)]))  # If using a 1-hot encoded output
 
     np.savez_compressed('results/acc-bias-tradeoff.npz', accs=np.array(accs),
-                        biases=np.array(biases))
+                        biases=np.array(biases), prune_factors=pfs)
     joblib.dump(rets, 'results/all-outputs.pkl', compress=3)
 
     plt.figure()
-    plt.plot(biases, accs)
+    plt.plot(biases, accs, 'C0-o')
     plt.savefig('figures/bias-acc-tradeoff.png')

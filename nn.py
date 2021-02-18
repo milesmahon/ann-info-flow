@@ -48,7 +48,7 @@ class SimpleNet(nn.Module):
 
 
 def train_ann(data, params, test=False, savefile=None):
-    # TODO: Implement early stopping
+    # TODO: Implement early stopping and weight initialization
 
     X, Y = data.data[:2]
     X = torch.from_numpy(np.array(X)).float()
@@ -69,6 +69,7 @@ def train_ann(data, params, test=False, savefile=None):
 
     # Set up neural network, loss function and optimizer
     net = SimpleNet()
+    net.train()
     criterion = params.criterion[data.dataset]
     optimizer = optim.SGD(net.parameters(), lr=learning_rate, momentum=momentum)
 

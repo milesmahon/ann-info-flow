@@ -21,16 +21,20 @@ def init_params(params=None):
     params.force_retrain = False
 
     # ANN training parameters for each dataset
-    params.num_epochs = {'tinyscm': 10, 'adult': 50}
+    params.num_epochs = {'tinyscm': 10, 'adult': 100}
     params.minibatch_size = {'tinyscm': 10, 'adult': 10}  # Should be a factor of num_train for each dataset
-    params.learning_rate = {'tinyscm': 0.1, 'adult': 1e-2}
+    params.learning_rate = {'tinyscm': 0.1, 'adult': 3e-3}
     params.momentum = {'tinyscm': 0.9, 'adult': 0.9}
-    params.print_every_factor = {'tinyscm': 10, 'adult': 4}  # Prints more for larger numbers
+    params.print_every_factor = {'tinyscm': 10, 'adult': 5}  # Prints more for larger numbers
     params.criterion = {
         #'tinyscm': nn.MSELoss(),
         'tinyscm': nn.CrossEntropyLoss(),  # expects 1-hot encoding at output of NN
         #'adult': nn.MSELoss() ,
         'adult': nn.CrossEntropyLoss(),  # expects 1-hot encoding at output of NN
     }
+
+    # Parameters for analyzing the ANN
+    params.analysis_file = 'results/analyzed-data.pkl'
+    params.force_reanalyze = False
 
     return params

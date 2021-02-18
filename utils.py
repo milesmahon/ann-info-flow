@@ -6,7 +6,14 @@ import itertools as it
 
 
 def powerset(iterable, start=0):
-    "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
+    """
+    Set of all subsets:
+        powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)
+
+    `start` defines the minimum number of items to have in each output subset:
+        start=0 will include the empty set;
+        start=n will include all subsets of cardinality >= n
+    """
     s = list(iterable)
     return it.chain.from_iterable(it.combinations(s, r)
                                   for r in range(start, len(s)+1))
