@@ -13,7 +13,7 @@ from param_utils import init_params
 from data_utils import init_data, generate_data
 from info_measures import (mutual_info_bin, compute_all_flows,
                            weight_info_flows, acc_from_mi)
-from pruning import prune_nodes_biasacc
+from pruning import prune
 from utils import powerset, print_mis, print_edge_data, print_node_data
 from nn import SimpleNet, train_ann
 from plot_utils import plot_ann
@@ -34,7 +34,59 @@ def corrcoef(x, y):
     return cov / (sigma_x[:, None] * sigma_y)
 
 
-def analyze_info_flow(net, data, params): #num_data, num_train):
+def compute_info_flows(Z_test, Xint, layer_sizes, header, weights, full=True, verbose=True):
+    """
+    Compute all information flows.
+
+    If `full` is False, compute only mutual information on the final layer.
+    """
+
+    num_layers = len(layer_sizes)
+
+    if full is not True:
+        z_mi, z_acc = mutual_info_bin(Z_test, Xint[-1], Hx=1, return_acc=True)
+        if verbose: print('Accuracy: %.4f' % z_acc)
+        return z_mi
+
+    if verbose:
+        print('Accuracies:')
+        print(header)
+
+    z_mis = [None,] * num_layers
+    for i in range(num_layers):
+        if verbose: print(i, end='', flush=True)
+        z_mis[i] = {(): 0}
+        if Xint[i].ndim == 1:
+            Xint[i] = Xint[i].reshape((-1, 1))
+        for js in powerset(range(layer_sizes[i]), start=1):  # start=1 avoids the empty set
+            z_mi, z_acc = mutual_info_bin(Z_test, Xint[i][:, js], Hx=1,
+                                          return_acc=True)
+            z_mis[i][js] = z_mi
+            if verbose: print('\t%.4f' % z_acc, end='', flush=True)
+        if verbose: print()
+
+    z_info_flows = compute_all_flows(z_mis, layer_sizes)
+    z_info_flows_weighted = weight_info_flows(z_info_flows, weights)
+
+    if verbose:
+        print('Mutual informations:')
+        print_mis(z_mis, layer_sizes, header)
+        print('Information flows:')
+        print_node_data(z_info_flows, layer_sizes)
+        print('Weighted information flows:')
+        print_edge_data(z_info_flows_weighted, layer_sizes)
+        print()
+
+    return z_mis, z_info_flows, z_info_flows_weighted
+
+
+def analyze_info_flow(net, data, params, full=True):
+    """
+    Compute bias and accuracy flows on all edges of the neural net.
+
+    If `full` is False, return bias and accuracy only for the final layer of
+    the neural net (i.e., don't analyze flows).
+    """
     X, Y, Z = data.data[:3]
     X = np.array(X)
     Y = np.array(Y)
@@ -70,73 +122,82 @@ def analyze_info_flow(net, data, params): #num_data, num_train):
     num_layers = len(Xint)
     layer_sizes = [(Xint_.shape[1] if Xint_.ndim > 1 else 1) for Xint_ in Xint]
 
-    z_corr = [corrcoef(Z_test[:, None], Xint[i]) for i in range(num_layers)]
-    print('Correlations with Z:')
-    for corr in z_corr: print(corr)
-    print()
+    #z_corr = [corrcoef(Z_test[:, None], Xint[i]) for i in range(num_layers)]
+    #print('Correlations with Z:')
+    #for corr in z_corr: print(corr)
+    #print()
 
-    print('Correlations with Y:')
-    y_corr = [corrcoef(Y_test[:, None], Xint[i]) for i in range(num_layers)]
-    for corr in y_corr: print(corr)
-    print()
+    #print('Correlations with Y:')
+    #y_corr = [corrcoef(Y_test[:, None], Xint[i]) for i in range(num_layers)]
+    #for corr in y_corr: print(corr)
+    #print()
 
     print('Weights')
-    weights = [getattr(net, 'fc%d' % i).weight.data.numpy()
-               for i in range(1, num_layers)]
+    weights = net.get_weights()
     print_edge_data(weights, layer_sizes)
     print()
 
     header = 'Layer\tX1\tX2\tX3\tX12\tX13\tX23\tX123'
 
     print('Computing bias flows...')
-    print('Accuracies:')
-    print(header)
-    z_mis = [None,] * num_layers
-    for i in range(num_layers):
-        print(i, end='', flush=True)
-        z_mis[i] = {(): 0}
-        if Xint[i].ndim == 1:
-            Xint[i] = Xint[i].reshape((-1, 1))
-        for js in powerset(range(layer_sizes[i]), start=1):  # start=1 avoids the empty set
-            z_mi, z_acc = mutual_info_bin(Z_test, Xint[i][:, js], Hx=1,
-                                          return_acc=True)
-            z_mis[i][js] = z_mi
-            print('\t%.4f' % z_acc, end='', flush=True)
-        print()
-    print('Mutual informations:')
-    print_mis(z_mis, layer_sizes, header)
-    print('Information flows:')
-    z_info_flows = compute_all_flows(z_mis, layer_sizes)
-    print_node_data(z_info_flows, layer_sizes)
-    print('Weighted information flows:')
-    z_info_flows_weighted = weight_info_flows(z_info_flows, weights)
-    print_edge_data(z_info_flows_weighted, layer_sizes)
-    print()
+    if full:
+        ret = compute_info_flows(Z_test, Xint, layer_sizes, header, weights, full=full, verbose=True)
+        z_mis, z_info_flows, z_info_flows_weighted = ret
+    else:
+        z_mi = compute_info_flows(Z_test, Xint, layer_sizes, header, weights, full=full, verbose=True)
+    #print('Accuracies:')
+    #print(header)
+    #z_mis = [None,] * num_layers
+    #for i in range(num_layers):
+    #    print(i, end='', flush=True)
+    #    z_mis[i] = {(): 0}
+    #    if Xint[i].ndim == 1:
+    #        Xint[i] = Xint[i].reshape((-1, 1))
+    #    for js in powerset(range(layer_sizes[i]), start=1):  # start=1 avoids the empty set
+    #        z_mi, z_acc = mutual_info_bin(Z_test, Xint[i][:, js], Hx=1,
+    #                                      return_acc=True)
+    #        z_mis[i][js] = z_mi
+    #        print('\t%.4f' % z_acc, end='', flush=True)
+    #    print()
+    #print('Mutual informations:')
+    #print_mis(z_mis, layer_sizes, header)
+    #print('Information flows:')
+    #z_info_flows = compute_all_flows(z_mis, layer_sizes)
+    #print_node_data(z_info_flows, layer_sizes)
+    #print('Weighted information flows:')
+    #z_info_flows_weighted = weight_info_flows(z_info_flows, weights)
+    #print_edge_data(z_info_flows_weighted, layer_sizes)
+    #print()
 
     print('Computing accuracy flows...')
-    print('Accuracies:')
-    print(header)
-    y_mis = [None,] * num_layers
-    for i in range(num_layers):
-        print(i, end='', flush=True)
-        y_mis[i] = {(): 0}
-        if Xint[i].ndim == 1:
-            Xint[i] = Xint[i].reshape((-1, 1))
-        for js in powerset(range(layer_sizes[i]), start=1):
-            y_mi, y_acc = mutual_info_bin(Y_test, Xint[i][:, js], Hx=1,
-                                          return_acc=True)
-            y_mis[i][js] = y_mi
-            print('\t%.4f' % y_acc, end='', flush=True)
-        print()
-    print('Mutual informations:')
-    print_mis(y_mis, layer_sizes, header)
-    print('Information flows:')
-    y_info_flows = compute_all_flows(y_mis, layer_sizes)
-    print_node_data(y_info_flows, layer_sizes)
-    print('Weighted information flows:')
-    y_info_flows_weighted = weight_info_flows(y_info_flows, weights)
-    print_edge_data(y_info_flows_weighted, layer_sizes)
-    print()
+    if full:
+        ret = compute_info_flows(Y_test, Xint, layer_sizes, header, weights, full=full, verbose=True)
+        y_mis, y_info_flows, y_info_flows_weighted = ret
+    else:
+        y_mi = compute_info_flows(Y_test, Xint, layer_sizes, header, weights, full=full, verbose=True)
+    #print('Accuracies:')
+    #print(header)
+    #y_mis = [None,] * num_layers
+    #for i in range(num_layers):
+    #    print(i, end='', flush=True)
+    #    y_mis[i] = {(): 0}
+    #    if Xint[i].ndim == 1:
+    #        Xint[i] = Xint[i].reshape((-1, 1))
+    #    for js in powerset(range(layer_sizes[i]), start=1):
+    #        y_mi, y_acc = mutual_info_bin(Y_test, Xint[i][:, js], Hx=1,
+    #                                      return_acc=True)
+    #        y_mis[i][js] = y_mi
+    #        print('\t%.4f' % y_acc, end='', flush=True)
+    #    print()
+    #print('Mutual informations:')
+    #print_mis(y_mis, layer_sizes, header)
+    #print('Information flows:')
+    #y_info_flows = compute_all_flows(y_mis, layer_sizes)
+    #print_node_data(y_info_flows, layer_sizes)
+    #print('Weighted information flows:')
+    #y_info_flows_weighted = weight_info_flows(y_info_flows, weights)
+    #print_edge_data(y_info_flows_weighted, layer_sizes)
+    #print()
 
     #plt.figure()
     #mask = (Yhat > 0.5)
@@ -150,16 +211,25 @@ def analyze_info_flow(net, data, params): #num_data, num_train):
 
     #plt.show()
 
-    return (z_mis, z_info_flows, z_info_flows_weighted,
-            y_mis, y_info_flows, y_info_flows_weighted,
-            accuracy)
+    if full:
+        return (z_mis, z_info_flows, z_info_flows_weighted,
+                y_mis, y_info_flows, y_info_flows_weighted,
+                accuracy)
+    else:
+        return z_mi, y_mi
 
 
 if __name__ == '__main__':
     params = init_params()
-    #params.force_regenerate = True  # Only relevant for tinyscm
-    #params.force_retrain = True
-    #params.force_reanalyze = True
+    # Set all parameters in param_utils!
+
+    # TODO: We might want to move this to the start of every info flow
+    # computation. The idea being that we want info flow computations to yield
+    # similar results, no matter what order they are performed in.
+    # We also want information quantities to change in a more predictable way
+    # upon pruning the network: chances are that it currently changes in
+    # unpredictable ways because of randomization during cross validation
+    #np.random.seed(128)
 
     #data = init_data(params, dataset='tinyscm')
     data = init_data(params, dataset='adult')
@@ -193,52 +263,65 @@ if __name__ == '__main__':
 
     # Analyze the network before pruning
     if params.force_reanalyze or params.analysis_file is None:
-        ret_before = analyze_info_flow(net, data, params)
+        ret_before = analyze_info_flow(net, data, params, full=True)  # Must do a full analysis
         joblib.dump(ret_before, params.analysis_file, compress=3)
     else:
         ret_before = joblib.load(params.analysis_file)
     #(z_mis, z_info_flows, z_info_flows_weighted,
     # y_mis, y_info_flows, y_info_flows_weighted, acc) = ret_before
-    plot_ann(net.layer_sizes, ret_before[2])
-    plt.title('Weighted flows before pruning')
-    plt.savefig('figures/weighted-flows-before.png')
-    plt.close()
+
+    #plot_ann(net.layer_sizes, ret_before[2])
+    #plt.title('Weighted flows before pruning')
+    #plt.savefig('figures/weighted-flows-before.png')
+    #plt.close()
 
     accs = []
     rets = []
     biases = []
-    #pfs = [1,]
-    pfs = np.linspace(0, 1, 10, endpoint=False)
-    num_to_prune = 1
+    pfs = params.prune_factors
     for pf in pfs:
         print('------------------------------------------------')
         print('Prune factor: %g' % pf)
         print('------------------------------------------------\n')
 
-        pruned_net = prune_nodes_biasacc(net, ret_before[1], ret_before[4],
-                                         num_nodes=num_to_prune, prune_factor=pf)
+        pruned_net = prune(net, ret_before[1], ret_before[4], prune_factor=pf,
+                           params=params)
 
-        ret = analyze_info_flow(pruned_net, data, params)
-        (z_mis, z_info_flows, z_info_flows_weighted,
-         y_mis, y_info_flows, y_info_flows_weighted, acc) = ret
+        # TODO: Important point: In order to make bias-acc tradeoff curves, we
+        # don't need to reanalyze the whole network. It suffices to measure
+        # the bias alone at the output. The rest is needed only for
+        # visualization, which is not a major focus right now.
+        #ret = analyze_info_flow(pruned_net, data, params, full=True)
+        #(z_mis, z_info_flows, z_info_flows_weighted,
+        # y_mis, y_info_flows, y_info_flows_weighted, acc) = ret
+        ret = analyze_info_flow(pruned_net, data, params, full=False)
+        z_mi, y_mi = ret
 
-        plot_ann(pruned_net.layer_sizes, z_info_flows_weighted)
-        plt.title('Prune factor: %g' % pf)
-        plt.savefig('figures/weighted-flows-pf%g.png' % pf)
+        #plot_ann(pruned_net.layer_sizes, z_info_flows_weighted)
+        #plt.title('Prune factor: %g' % pf)
+        #plt.savefig('figures/weighted-flows-pf%g.png' % pf)
 
         rets.append(ret)
 
-        #accs.append(acc)  # Raw accuracy from the neural network itself
+        # Raw accuracy from the neural network itself
+        #accs.append(acc)
+        # Accuracy based applying an SVM on top of the ANN's output
         #accs.append(acc_from_mi(y_mis[2][(0,)]))  # If using a single output node
-        accs.append(acc_from_mi(y_mis[2][(0, 1)]))  # If using a 1-hot encoded output
+        #accs.append(acc_from_mi(y_mis[2][(0, 1)]))  # If using a 1-hot encoded output
+        accs.append(acc_from_mi(y_mi))
 
         #biases.append(acc_from_mi(z_mis[2][(0,)]))  # If using a single output node
-        biases.append(acc_from_mi(z_mis[2][(0, 1)]))  # If using a 1-hot encoded output
+        #biases.append(acc_from_mi(z_mis[2][(0, 1)]))  # If using a 1-hot encoded output
+        biases.append(acc_from_mi(z_mi))
 
-    np.savez_compressed('results/acc-bias-tradeoff.npz', accs=np.array(accs),
+    # Append accuracies/biases for the before-pruning case
+    accs.append(acc_from_mi(ret_before[3][2][(0, 1)]))
+    biases.append(acc_from_mi(ret_before[0][2][(0, 1)]))
+
+    tradeoff_filename = ('results/tradeoff-%s-%s-%d.npz'
+                         % (params.prune_metric, params.prune_method, params.num_to_prune))
+    np.savez_compressed(tradeoff_filename, accs=np.array(accs),
                         biases=np.array(biases), prune_factors=pfs)
-    joblib.dump(rets, 'results/all-outputs.pkl', compress=3)
-
-    plt.figure()
-    plt.plot(biases, accs, 'C0-o')
-    plt.savefig('figures/bias-acc-tradeoff.png')
+    rets_filename = ('results/rets-%s-%s-%d.pkl'
+                     % (params.prune_metric, params.prune_method, params.num_to_prune))
+    joblib.dump(dict(rets=rets, params=params), rets_filename, compress=3)

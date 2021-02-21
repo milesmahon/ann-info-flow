@@ -1,3 +1,4 @@
+import numpy as np
 from types import SimpleNamespace
 import torch.nn as nn
 
@@ -17,11 +18,12 @@ def init_params(params=None):
     params.force_regenerate = False # For simulated dataset
 
     # ANN parameters
-    params.annfile = 'nn-state.sav'
+    params.annfile = 'results/nn-state.sav'
+    #params.force_retrain = True
     params.force_retrain = False
 
     # ANN training parameters for each dataset
-    params.num_epochs = {'tinyscm': 10, 'adult': 100}
+    params.num_epochs = {'tinyscm': 10, 'adult': 50}
     params.minibatch_size = {'tinyscm': 10, 'adult': 10}  # Should be a factor of num_train for each dataset
     params.learning_rate = {'tinyscm': 0.1, 'adult': 3e-3}
     params.momentum = {'tinyscm': 0.9, 'adult': 0.9}
@@ -29,12 +31,22 @@ def init_params(params=None):
     params.criterion = {
         #'tinyscm': nn.MSELoss(),
         'tinyscm': nn.CrossEntropyLoss(),  # expects 1-hot encoding at output of NN
-        #'adult': nn.MSELoss() ,
+        #'adult': nn.MSELoss(),
         'adult': nn.CrossEntropyLoss(),  # expects 1-hot encoding at output of NN
     }
 
-    # Parameters for analyzing the ANN
+    # Parameters for initial analysis of the ANN
     params.analysis_file = 'results/analyzed-data.pkl'
+    #params.force_reanalyze = True
     params.force_reanalyze = False
+
+    # Parameters for pruning
+    params.prune_metrics = ['biasacc', 'accbias']
+    params.prune_methods = ['node', 'edge', 'edge-rwf']
+    params.prune_metric = params.prune_metrics[1]
+    params.prune_method = params.prune_methods[1]
+    params.num_to_prune = 2  # Number of nodes or edges to prune
+    params.prune_factors = np.linspace(0, 1, 10, endpoint=False)
+    #params.prune_factors = [0, 0.1, 0.5]
 
     return params

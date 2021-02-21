@@ -94,14 +94,12 @@ def init_data(params, dataset=None, data=None):
         Y = Y[inds_trunc]
         Z = Z[inds_trunc, :]
 
-        # Standardize features
-        # XXX: This isn't the best way to standardize, because we are making
-        # the training and test data points slightly dependent on each other
-        X -= X.mean(axis=0)
-        X /= X.std(axis=0)
-
         params.num_data = inds_trunc.size
         params.num_train = train_inds_trunc.size
+
+        # Standardize features based on training data
+        X -= X[:params.num_train].mean(axis=0)
+        X /= X[:params.num_train].std(axis=0)
 
         data.data = (X, Y, Z)
 

@@ -5,11 +5,12 @@ from __future__ import print_function, division
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.optimize as opt
+from scipy import stats
 
 from sklearn import preprocessing, svm, linear_model
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import (GridSearchCV, RepeatedStratifiedKFold,
-                                     cross_validate)
+                                     cross_validate, RandomizedSearchCV)
 from sklearn.kernel_approximation import Nystroem, RBFSampler
 
 #import thundersvm
@@ -103,13 +104,17 @@ def mutual_info_bin(x, y, Hx=None, num_train=None, return_acc=False):
 
     # Hyperparameters
     #Cs = np.logspace(-2, 2, 25)
-    Cs = np.logspace(-2, 2, 5)
-    gammas = np.logspace(-2, 2, 5)
+    # TODO: Use randomized grid search CV
+    #Cs = np.logspace(-2, 2, 5)
+    #gammas = np.logspace(-2, 2, 5)
+    C_dist = stats.loguniform(10**-2, 10**2)
+    gamma_dist = stats.loguniform(10**-2, 10**2)
+
     num_train = x.size
 
     # Jointly train and test to estimate best classification accuracy
-    outer_cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=1)
-    inner_cv = RepeatedStratifiedKFold(n_splits=4, n_repeats=1)
+    outer_cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=1, random_state=73)
+    inner_cv = RepeatedStratifiedKFold(n_splits=4, n_repeats=1, random_state=71)
 
     #pipe = Pipeline(steps=[('scaler', scaler), ('svc', classifier)])
     #estimator = GridSearchCV(pipe, dict(svc__C=Cs, svc__gamma=gammas),
@@ -117,8 +122,10 @@ def mutual_info_bin(x, y, Hx=None, num_train=None, return_acc=False):
     pipe = Pipeline(steps=[('scaler', scaler), ('fm', feature_map), ('svc', classifier)])
     #estimator = GridSearchCV(pipe, dict(fm__gamma=gammas, svc__C=Cs,),
     #                         cv=inner_cv)
-    estimator = GridSearchCV(pipe, dict(fm__gamma=gammas, svc__alpha=Cs,),
-                             cv=inner_cv)
+    #estimator = GridSearchCV(pipe, dict(fm__gamma=gammas, svc__alpha=Cs,),
+    #                         cv=inner_cv)
+    estimator = RandomizedSearchCV(pipe, dict(fm__gamma=gamma_dist, svc__alpha=C_dist),
+                                   cv=inner_cv, n_iter=25, random_state=53)
 
     #import warnings
     #with warnings.catch_warnings():
@@ -186,6 +193,14 @@ def compute_all_flows(all_mis, layer_sizes):
 
 
 def weight_info_flows(all_flows, weights):
+    """
+    For each layer, multiply info flows measured for each node with the weights
+    of the outgoing edges.
+
+    Weighted flows are returned in the same format as the weights of the
+    neural network, where weighted_flows[k][j, i] is the weighted flow going
+    from node i in layer k to node j in layer k+1.
+    """
     weighted_flows = [flows * w for flows, w in zip(all_flows[:-1], weights)]
     # Very last layer of nodes has no outgoing edges, so all weights are 1
     weighted_flows.append(all_flows[-1])
@@ -195,7 +210,6 @@ def weight_info_flows(all_flows, weights):
 
 if __name__ == '__main__':
     import scipy.linalg as la
-    from scipy import stats
 
 
     def gen_random_orthogonal_matrix(d):

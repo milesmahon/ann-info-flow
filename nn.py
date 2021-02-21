@@ -49,6 +49,7 @@ class SimpleNet(nn.Module):
 
 def train_ann(data, params, test=False, savefile=None):
     # TODO: Implement early stopping and weight initialization
+    torch.manual_seed(13)
 
     X, Y = data.data[:2]
     X = torch.from_numpy(np.array(X)).float()
@@ -103,6 +104,7 @@ def train_ann(data, params, test=False, savefile=None):
         torch.save(net.state_dict(), savefile)
 
     if test:
+        net.eval()
         num_test = params.num_data - params.num_train
         X_test = X[params.num_train:]
         Y_test = Y[params.num_train:]
