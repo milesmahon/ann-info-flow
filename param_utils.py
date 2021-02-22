@@ -11,23 +11,26 @@ def init_params(params=None):
 
     # Data parameters
     params.datasets = ['tinyscm', 'adult']
-    params.default_dataset = params.datasets[0]
+    params.dataset = params.datasets[0]
+
+    # Parameters specific to tinyscm
     params.num_data = 2000  # Should be moved to data.num_data etc at some point
     params.num_train = 1000
-    params.datafile = 'data-%d.pkl' % params.num_data
+    params.datafile = 'results-%s/data-%d.pkl' % (params.dataset, params.num_data)
     params.force_regenerate = False # For simulated dataset
+    #params.force_regenerate = True # For simulated dataset
 
     # ANN parameters
-    params.annfile = 'results/nn-state.sav'
+    params.annfile = 'results-%s/nn-state.sav' % params.dataset
     #params.force_retrain = True
     params.force_retrain = False
 
     # ANN training parameters for each dataset
-    params.num_epochs = {'tinyscm': 10, 'adult': 50}
+    params.num_epochs = {'tinyscm': 50, 'adult': 50}
     params.minibatch_size = {'tinyscm': 10, 'adult': 10}  # Should be a factor of num_train for each dataset
-    params.learning_rate = {'tinyscm': 0.1, 'adult': 3e-3}
+    params.learning_rate = {'tinyscm': 0.03, 'adult': 3e-3}
     params.momentum = {'tinyscm': 0.9, 'adult': 0.9}
-    params.print_every_factor = {'tinyscm': 10, 'adult': 5}  # Prints more for larger numbers
+    params.print_every_factor = {'tinyscm': 5, 'adult': 5}  # Prints more for larger numbers
     params.criterion = {
         #'tinyscm': nn.MSELoss(),
         'tinyscm': nn.CrossEntropyLoss(),  # expects 1-hot encoding at output of NN
@@ -36,7 +39,7 @@ def init_params(params=None):
     }
 
     # Parameters for initial analysis of the ANN
-    params.analysis_file = 'results/analyzed-data.pkl'
+    params.analysis_file = 'results-%s/analyzed-data.pkl' % params.dataset
     #params.force_reanalyze = True
     params.force_reanalyze = False
 

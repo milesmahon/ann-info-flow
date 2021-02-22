@@ -2,22 +2,31 @@
 
 from __future__ import print_function, division
 
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
+from param_utils import init_params
+
 
 if __name__ == '__main__':
-    dataset = 'adult'
+    if len(sys.argv) > 1:
+        dataset = sys.argv[1]
+    else:
+        params = init_params()
+        dataset = params.dataset
+
+    results_dir = 'results-%s' % dataset
     tradeoff_files = [
-        'results/tradeoff-biasacc-node-1.npz',
-        'results/tradeoff-biasacc-node-2.npz',
-        'results/tradeoff-accbias-node-1.npz',
-        'results/tradeoff-accbias-node-2.npz',
-        'results/tradeoff-biasacc-edge-1.npz',
-        'results/tradeoff-biasacc-edge-2.npz',
-        'results/tradeoff-accbias-edge-1.npz',
-        'results/tradeoff-accbias-edge-2.npz',
+        'tradeoff-biasacc-node-1.npz',
+        'tradeoff-biasacc-node-2.npz',
+        'tradeoff-accbias-node-1.npz',
+        'tradeoff-accbias-node-2.npz',
+        'tradeoff-biasacc-edge-1.npz',
+        'tradeoff-biasacc-edge-2.npz',
+        'tradeoff-accbias-edge-1.npz',
+        'tradeoff-accbias-edge-2.npz',
     ]
-    colors = ['C0-o', 'C1-o', 'C0-s', 'C1-s', 'C2--o', 'C3--o', 'C2--s', 'C3--s']
+    colors = ['C0-o', 'C1-o', 'C0--s', 'C1--s', 'C2-o', 'C3-o', 'C2--s', 'C3--s']
     legend = [
         'biasacc-node-1',
         'biasacc-node-2',
@@ -32,7 +41,7 @@ if __name__ == '__main__':
     plt.figure()
 
     for tradeoff_file, color in zip(tradeoff_files, colors):
-        data = np.load(tradeoff_file)
+        data = np.load(results_dir + '/' + tradeoff_file)
         accs = data['accs']
         biases = data['biases']
         plt.plot(biases, accs, color)
@@ -55,6 +64,6 @@ if __name__ == '__main__':
     # Put a legend to the right of the current axis
     ax.legend(legend, title='Configuration', loc='center left', bbox_to_anchor=(1, 0.5))
     #plt.legend(legend, loc='best', title='Configuration', fontsize=14)
-    plt.savefig('figures/bias-acc-tradeoff.png')
+    plt.savefig(results_dir + '/bias-acc-tradeoff.png')
 
     plt.show()

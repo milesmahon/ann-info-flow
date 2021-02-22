@@ -5,6 +5,7 @@ from __future__ import print_function, division
 import os
 import copy
 import joblib
+import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
@@ -145,29 +146,6 @@ def analyze_info_flow(net, data, params, full=True):
         z_mis, z_info_flows, z_info_flows_weighted = ret
     else:
         z_mi = compute_info_flows(Z_test, Xint, layer_sizes, header, weights, full=full, verbose=True)
-    #print('Accuracies:')
-    #print(header)
-    #z_mis = [None,] * num_layers
-    #for i in range(num_layers):
-    #    print(i, end='', flush=True)
-    #    z_mis[i] = {(): 0}
-    #    if Xint[i].ndim == 1:
-    #        Xint[i] = Xint[i].reshape((-1, 1))
-    #    for js in powerset(range(layer_sizes[i]), start=1):  # start=1 avoids the empty set
-    #        z_mi, z_acc = mutual_info_bin(Z_test, Xint[i][:, js], Hx=1,
-    #                                      return_acc=True)
-    #        z_mis[i][js] = z_mi
-    #        print('\t%.4f' % z_acc, end='', flush=True)
-    #    print()
-    #print('Mutual informations:')
-    #print_mis(z_mis, layer_sizes, header)
-    #print('Information flows:')
-    #z_info_flows = compute_all_flows(z_mis, layer_sizes)
-    #print_node_data(z_info_flows, layer_sizes)
-    #print('Weighted information flows:')
-    #z_info_flows_weighted = weight_info_flows(z_info_flows, weights)
-    #print_edge_data(z_info_flows_weighted, layer_sizes)
-    #print()
 
     print('Computing accuracy flows...')
     if full:
@@ -175,29 +153,6 @@ def analyze_info_flow(net, data, params, full=True):
         y_mis, y_info_flows, y_info_flows_weighted = ret
     else:
         y_mi = compute_info_flows(Y_test, Xint, layer_sizes, header, weights, full=full, verbose=True)
-    #print('Accuracies:')
-    #print(header)
-    #y_mis = [None,] * num_layers
-    #for i in range(num_layers):
-    #    print(i, end='', flush=True)
-    #    y_mis[i] = {(): 0}
-    #    if Xint[i].ndim == 1:
-    #        Xint[i] = Xint[i].reshape((-1, 1))
-    #    for js in powerset(range(layer_sizes[i]), start=1):
-    #        y_mi, y_acc = mutual_info_bin(Y_test, Xint[i][:, js], Hx=1,
-    #                                      return_acc=True)
-    #        y_mis[i][js] = y_mi
-    #        print('\t%.4f' % y_acc, end='', flush=True)
-    #    print()
-    #print('Mutual informations:')
-    #print_mis(y_mis, layer_sizes, header)
-    #print('Information flows:')
-    #y_info_flows = compute_all_flows(y_mis, layer_sizes)
-    #print_node_data(y_info_flows, layer_sizes)
-    #print('Weighted information flows:')
-    #y_info_flows_weighted = weight_info_flows(y_info_flows, weights)
-    #print_edge_data(y_info_flows_weighted, layer_sizes)
-    #print()
 
     #plt.figure()
     #mask = (Yhat > 0.5)
@@ -221,18 +176,37 @@ def analyze_info_flow(net, data, params, full=True):
 
 if __name__ == '__main__':
     params = init_params()
-    # Set all parameters in param_utils!
+    # Set all default parameters in param_utils!
 
-    # TODO: We might want to move this to the start of every info flow
-    # computation. The idea being that we want info flow computations to yield
-    # similar results, no matter what order they are performed in.
-    # We also want information quantities to change in a more predictable way
-    # upon pruning the network: chances are that it currently changes in
-    # unpredictable ways because of randomization during cross validation
-    #np.random.seed(128)
+    parser = argparse.ArgumentParser(description='Information flow analysis and'
+                                     +'bias removal by pruning on trained ANNs')
+    parser.add_argument('-d', '--dataset', choices=params.datasets,
+                        help='Dataset to use for analysis')
+    parser.add_argument('--metric', choices=params.prune_metrics)
+    parser.add_argument('--method', choices=params.prune_methods)
+    parser.add_argument('--pruneamt', help='Amount by which to prune')
+    parser.add_argument('--runs', default=1, help='Number of times to run the analysis.')
+    args = parser.parse_args()
 
-    #data = init_data(params, dataset='tinyscm')
-    data = init_data(params, dataset='adult')
+    # NOTE: If the number of runs is >1, and params.force_retrain or
+    # params.force_reanalyze are False, then the code will expect to find at least
+    # `runs` instances of trained and/or analyzed nets in the respective files.
+
+    # Override params specified in param_utils, if given in CLI
+    if args.dataset:
+        params.dataset = args.dataset
+    if args.metric:
+        params.prune_metric = args.metric
+    if args.method:
+        params.prune_method = args.method
+    if args.pruneamt:
+        params.num_to_prune = int(args.pruneamt)
+
+    num_runs = args.runs
+    if num_runs > 1:
+        raise NotImplementedError()
+
+    data = init_data(params)
     print(params.num_data, params.num_train)
 
     # Check data statistics
@@ -318,10 +292,10 @@ if __name__ == '__main__':
     accs.append(acc_from_mi(ret_before[3][2][(0, 1)]))
     biases.append(acc_from_mi(ret_before[0][2][(0, 1)]))
 
-    tradeoff_filename = ('results/tradeoff-%s-%s-%d.npz'
-                         % (params.prune_metric, params.prune_method, params.num_to_prune))
+    file_params = (params.dataset, params.prune_metric, params.prune_method,
+                   params.num_to_prune)
+    tradeoff_filename = ('results-%s/tradeoff-%s-%s-%d.npz' % file_params)
     np.savez_compressed(tradeoff_filename, accs=np.array(accs),
                         biases=np.array(biases), prune_factors=pfs)
-    rets_filename = ('results/rets-%s-%s-%d.pkl'
-                     % (params.prune_metric, params.prune_method, params.num_to_prune))
+    rets_filename = ('results-%s/rets-%s-%s-%d.pkl' % file_params)
     joblib.dump(dict(rets=rets, params=params), rets_filename, compress=3)

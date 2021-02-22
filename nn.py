@@ -47,9 +47,12 @@ class SimpleNet(nn.Module):
             getattr(self, 'fc%d' % (i + 1)).weight.data.numpy()[:, :] = w
 
 
-def train_ann(data, params, test=False, savefile=None):
+def train_ann(data, params, test=False, savefile=None, random_seed=None):
     # TODO: Implement early stopping and weight initialization
-    torch.manual_seed(13)
+    if random_state is None:
+        torch.manual_seed(13)
+    else:
+        torch.manual_seed(random_seed)
 
     X, Y = data.data[:2]
     X = torch.from_numpy(np.array(X)).float()

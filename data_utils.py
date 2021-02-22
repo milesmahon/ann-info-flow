@@ -12,11 +12,10 @@ import scipy.optimize as opt
 import scipy.special as spl
 
 
-def init_data(params, dataset=None, data=None):
+def init_data(params, data=None):
     if data is None:
         data = SimpleNamespace()
-    if dataset is None:
-        dataset = params.default_dataset
+    dataset = params.dataset
     data.dataset = dataset
 
     if dataset == 'tinyscm':
@@ -149,6 +148,8 @@ def compute_x_biased(u, z, alpha, beta, sigma):
 
 
 def generate_data(n):
+    np.random.seed(7)
+
     # Gaussian distribution
     uy = np.random.randn(n)
     ug = np.random.randn(n)
