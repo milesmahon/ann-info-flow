@@ -21,7 +21,28 @@ def init_data(params, data=None):
     if dataset == 'tinyscm':
         # Load data if it exists; generate and save data otherwise
         if params.datafile is None or params.force_regenerate:
-            data.data = generate_data(params.num_data)  # TODO: Generate approx 30% more data, and then cut down to make classes balanced - might want to make the class balancing code a function
+            (X, Y, Z, U) = generate_data(int(1.5 * params.num_data))
+
+            # Choose a balanced sample of output classes
+            class_inds = [np.where((Y == 0) & (Z == 0))[0],
+                          np.where((Y == 1) & (Z == 0))[0],
+                          np.where((Y == 0) & (Z == 1))[0],
+                          np.where((Y == 1) & (Z == 1))[0]]
+            min_len = min(len(ci) for ci in class_inds)
+            if min_len < params.num_data // 4:
+                # TODO: Make this into a while loop or something
+                raise RuntimeError('Couldn\'t generate enough data')
+            else:
+                min_len = params.num_data // 4
+            inds = np.concatenate([ci[:min_len] for ci in class_inds])
+            # This permutation follows up on the random seed set in generate_data
+            inds = inds[np.random.permutation(params.num_data)]
+            X = X[inds]
+            Y = Y[inds]
+            Z = Z[inds]
+            U = U[inds]
+            data.data = (X, Y, Z, U)
+
             print('Data generation complete')
             if params.datafile is not None:
                 joblib.dump(data.data, params.datafile, compress=3)
@@ -148,7 +169,7 @@ def compute_x_biased(u, z, alpha, beta, sigma):
 
 
 def generate_data(n):
-    np.random.seed(7)
+    np.random.seed(97)  # Was 7
 
     # Gaussian distribution
     uy = np.random.randn(n)
@@ -167,6 +188,8 @@ def generate_data(n):
     x3 = compute_x_biased(ug, z, 0.1, 0.1, 0.2)  # No bias
     x = np.array([x1, x2, x3]).T
 
+    # NOTE: There is some weird ordering effect coming from the above methods.
+    # These arrays need to be permuted before use
     return x, y, z, u
 
 
