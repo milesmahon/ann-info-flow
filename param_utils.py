@@ -17,12 +17,11 @@ def init_params(params=None):
     params.num_data = 10000  # Should be moved to data.num_data etc at some point
     params.num_train = 5000
     params.datafile = 'results-%s/data-%d.pkl' % (params.dataset, params.num_data)
-    #params.force_regenerate = False # For simulated dataset
-    params.force_regenerate = True # For simulated dataset
+    params.force_regenerate = False # For simulated dataset
+    #params.force_regenerate = True # For simulated dataset
 
     # ANN parameters
     params.annfile = 'results-%s/trained-nets.pkl' % params.dataset
-    #params.force_retrain = True
     params.force_retrain = False
 
     # ANN training parameters for each dataset
@@ -40,7 +39,6 @@ def init_params(params=None):
 
     # Parameters for initial analysis of the ANN
     params.analysis_file = 'results-%s/analyzed-data.pkl' % params.dataset
-    #params.force_reanalyze = True
     params.force_reanalyze = False
 
     # Parameters for pruning

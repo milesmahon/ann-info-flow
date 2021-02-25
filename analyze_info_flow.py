@@ -208,6 +208,8 @@ if __name__ == '__main__':
     parser.add_argument('--runs', type=int, help='Number of times to run the analysis.')
     parser.add_argument('--retrain', action='store_true', help='Retrain the ANNs if set')
     parser.add_argument('--reanalyze', action='store_true', help='Reanalyze the ANNs if set')
+    parser.add_argument('--train-only', action='store_true', help='Stop after training')
+    parser.add_argument('--analyze-only', action='store_true', help='Stop after analysis')
     args = parser.parse_args()
 
     print('\n------------------------------------------------')
@@ -251,6 +253,8 @@ if __name__ == '__main__':
         #net = SimpleNet()
         #net.load_state_dict(torch.load(params.annfile))
         nets = joblib.load(params.annfile)
+    if args.train_only:
+        sys.exit(0)
 
     # Analyze all nets before pruning
     if params.force_reanalyze or params.analysis_file is None:
@@ -263,6 +267,8 @@ if __name__ == '__main__':
         rets_before = joblib.load(params.analysis_file)
     #(z_mis, z_info_flows, z_info_flows_weighted,
     # y_mis, y_info_flows, y_info_flows_weighted, acc) = ret_before
+    if args.analyze_only:
+        sys.exit(0)
 
     #plot_ann(net.layer_sizes, ret_before[2])
     #plt.title('Weighted flows before pruning')
