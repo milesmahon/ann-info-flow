@@ -14,14 +14,14 @@ def init_params(params=None):
     params.dataset = params.datasets[0]
 
     # Parameters specific to tinyscm
-    params.num_data = 2000  # Should be moved to data.num_data etc at some point
-    params.num_train = 1000
+    params.num_data = 10000  # Should be moved to data.num_data etc at some point
+    params.num_train = 5000
     params.datafile = 'results-%s/data-%d.pkl' % (params.dataset, params.num_data)
-    params.force_regenerate = False # For simulated dataset
-    #params.force_regenerate = True # For simulated dataset
+    #params.force_regenerate = False # For simulated dataset
+    params.force_regenerate = True # For simulated dataset
 
     # ANN parameters
-    params.annfile = 'results-%s/nn-state.sav' % params.dataset
+    params.annfile = 'results-%s/trained-nets.pkl' % params.dataset
     #params.force_retrain = True
     params.force_retrain = False
 
@@ -51,5 +51,6 @@ def init_params(params=None):
     params.num_to_prune = 2  # Number of nodes or edges to prune
     params.prune_factors = np.linspace(0, 1, 10, endpoint=False)
     #params.prune_factors = [0, 0.1, 0.5]
+    params.num_runs = 1  # Number of times to run the analysis
 
     return params

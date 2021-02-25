@@ -155,8 +155,9 @@ if __name__ == '__main__':
     data = init_data(params, dataset='adult')
     print(params.num_data, params.num_train)
 
+    # XXX: After implementation of num_runs, this code below is now broken...
     if params.force_retrain or params.annfile is None:
-        net = train_ann(data, params, test=False, savefile=params.annfile)
+        net = train_ann(data, params, test=False)
     else:
         net = SimpleNet()
         net.load_state_dict(torch.load(params.annfile))

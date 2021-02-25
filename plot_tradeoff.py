@@ -16,35 +16,23 @@ if __name__ == '__main__':
         dataset = params.dataset
 
     results_dir = 'results-%s' % dataset
-    tradeoff_files = [
-        'tradeoff-biasacc-node-1.npz',
-        'tradeoff-biasacc-node-2.npz',
-        'tradeoff-accbias-node-1.npz',
-        'tradeoff-accbias-node-2.npz',
-        'tradeoff-biasacc-edge-1.npz',
-        'tradeoff-biasacc-edge-2.npz',
-        'tradeoff-accbias-edge-1.npz',
-        'tradeoff-accbias-edge-2.npz',
-    ]
+    with open(results_dir + '/combos.txt') as f:
+        combos = [line.strip() for line in f.readlines()]
+
+    tradeoff_files = ['tradeoff-%s.npz' % combo for combo in combos]
     colors = ['C0-o', 'C1-o', 'C0--s', 'C1--s', 'C2-o', 'C3-o', 'C2--s', 'C3--s']
-    legend = [
-        'biasacc-node-1',
-        'biasacc-node-2',
-        'accbias-node-1',
-        'accbias-node-2',
-        'biasacc-edge-1',
-        'biasacc-edge-2',
-        'accbias-edge-1',
-        'accbias-edge-2',
-    ]
+    legend = combos
 
     plt.figure()
 
+    avg_lines = []
     for tradeoff_file, color in zip(tradeoff_files, colors):
         data = np.load(results_dir + '/' + tradeoff_file)
         accs = data['accs']
         biases = data['biases']
-        plt.plot(biases, accs, color)
+        #plt.plot(biases.T, accs.T, color[:-1], alpha=0.5, linewidth=1)
+        avg_line, = plt.plot(biases.mean(axis=0), accs.mean(axis=0), color)
+        avg_lines.append(avg_line)
 
     #plt.axis('square')
     ax = plt.gca()
@@ -58,12 +46,13 @@ if __name__ == '__main__':
     plt.title('Bias-accuracy tradeoffs\n(%s dataset)' % dataset, fontsize=18)
     plt.xlabel('Bias', fontsize=16)
     plt.ylabel('Accuracy', fontsize=16)
-    # Shrink current axis by 20%
-    box = ax.get_position()
-    ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
-    # Put a legend to the right of the current axis
-    ax.legend(legend, title='Configuration', loc='center left', bbox_to_anchor=(1, 0.5))
-    #plt.legend(legend, loc='best', title='Configuration', fontsize=14)
+    # Put legend outside plot
+    #box = ax.get_position()
+    #ax.set_position([box.x0, box.y0, box.width * 0.9, box.height])
+    #ax.legend(avg_lines, legend, title='Configuration', loc='center left',
+    #          bbox_to_anchor=(1, 0.5), fontsize=12, title_fontsize=14)
+    ax.legend(avg_lines, legend, loc='best', title='Configuration', fontsize=12,
+              title_fontsize=14)
     plt.savefig(results_dir + '/bias-acc-tradeoff.png')
 
     plt.show()

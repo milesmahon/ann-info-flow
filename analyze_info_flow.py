@@ -2,8 +2,7 @@
 
 from __future__ import print_function, division
 
-import os
-import copy
+import sys
 import joblib
 import argparse
 import numpy as np
@@ -133,10 +132,10 @@ def analyze_info_flow(net, data, params, full=True):
     #for corr in y_corr: print(corr)
     #print()
 
-    print('Weights')
+    #print('Weights')
     weights = net.get_weights()
-    print_edge_data(weights, layer_sizes)
-    print()
+    #print_edge_data(weights, layer_sizes)
+    #print()
 
     header = 'Layer\tX1\tX2\tX3\tX12\tX13\tX23\tX123'
 
@@ -174,42 +173,7 @@ def analyze_info_flow(net, data, params, full=True):
         return z_mi, y_mi
 
 
-if __name__ == '__main__':
-    params = init_params()
-    # Set all default parameters in param_utils!
-
-    parser = argparse.ArgumentParser(description='Information flow analysis and'
-                                     +'bias removal by pruning on trained ANNs')
-    parser.add_argument('-d', '--dataset', choices=params.datasets,
-                        help='Dataset to use for analysis')
-    parser.add_argument('--metric', choices=params.prune_metrics)
-    parser.add_argument('--method', choices=params.prune_methods)
-    parser.add_argument('--pruneamt', help='Amount by which to prune')
-    parser.add_argument('--runs', default=1, help='Number of times to run the analysis.')
-    args = parser.parse_args()
-
-    # NOTE: If the number of runs is >1, and params.force_retrain or
-    # params.force_reanalyze are False, then the code will expect to find at least
-    # `runs` instances of trained and/or analyzed nets in the respective files.
-
-    # Override params specified in param_utils, if given in CLI
-    if args.dataset:
-        params.dataset = args.dataset
-    if args.metric:
-        params.prune_metric = args.metric
-    if args.method:
-        params.prune_method = args.method
-    if args.pruneamt:
-        params.num_to_prune = int(args.pruneamt)
-
-    num_runs = args.runs
-    if num_runs > 1:
-        raise NotImplementedError()
-
-    data = init_data(params)
-    print(params.num_data, params.num_train)
-
-    # Check data statistics
+def print_data_stats(data):
     X, Y, Z = data.data[:3]
     X = np.array(X)
     Y = np.array(Y)
@@ -229,18 +193,74 @@ if __name__ == '__main__':
                   np.where((Y[params.num_train:] == 1) & (Z[params.num_train:] == 1))[0]]  # Women, >50K
     print([ci.size for ci in class_inds])
 
-    if params.force_retrain or params.annfile is None:
-        net = train_ann(data, params, test=False, savefile=params.annfile)
-    else:
-        net = SimpleNet()
-        net.load_state_dict(torch.load(params.annfile))
 
-    # Analyze the network before pruning
-    if params.force_reanalyze or params.analysis_file is None:
-        ret_before = analyze_info_flow(net, data, params, full=True)  # Must do a full analysis
-        joblib.dump(ret_before, params.analysis_file, compress=3)
+if __name__ == '__main__':
+    params = init_params()
+    # Set all default parameters in param_utils!
+
+    parser = argparse.ArgumentParser(description='Information flow analysis and'
+                                     +'bias removal by pruning on trained ANNs')
+    parser.add_argument('-d', '--dataset', choices=params.datasets,
+                        help='Dataset to use for analysis')
+    parser.add_argument('--metric', choices=params.prune_metrics)
+    parser.add_argument('--method', choices=params.prune_methods)
+    parser.add_argument('--pruneamt', help='Amount by which to prune')
+    parser.add_argument('--runs', type=int, help='Number of times to run the analysis.')
+    parser.add_argument('--retrain', action='store_true', help='Retrain the ANNs if set')
+    parser.add_argument('--reanalyze', action='store_true', help='Reanalyze the ANNs if set')
+    args = parser.parse_args()
+
+    print('\n------------------------------------------------')
+    print(args)
+    print('------------------------------------------------\n')
+
+    # Override params specified in param_utils, if given in CLI
+    if args.dataset:
+        params.dataset = args.dataset
+    if args.metric:
+        params.prune_metric = args.metric
+    if args.method:
+        params.prune_method = args.method
+    if args.pruneamt:
+        params.num_to_prune = int(args.pruneamt)
+    if args.runs:
+        params.num_runs = args.runs
+    if args.retrain:
+        params.force_retrain = True
+    if args.reanalyze:
+        params.force_reanalyze = True
+
+    # NOTE: If the number of runs is >1, and params.force_retrain or
+    # params.force_reanalyze are False, then the code will expect to find at least
+    # `runs` instances of trained and/or analyzed nets in the respective files.
+
+    # For now, keep data fixed across runs
+    data = init_data(params)
+    print(params.num_data, params.num_train)
+    print_data_stats(data) # Check data statistics
+
+    # Train all neural nets in advance
+    if params.force_retrain or params.annfile is None:
+        nets = []
+        for run in range(params.num_runs):
+            net = train_ann(data, params, test=False, random_seed=(1000+run))
+            nets.append(net)
+        #torch.save(net.state_dict(), params.annfile)
+        joblib.dump(nets, params.annfile, compress=3)
     else:
-        ret_before = joblib.load(params.analysis_file)
+        #net = SimpleNet()
+        #net.load_state_dict(torch.load(params.annfile))
+        nets = joblib.load(params.annfile)
+
+    # Analyze all nets before pruning
+    if params.force_reanalyze or params.analysis_file is None:
+        rets_before = []
+        for run in range(params.num_runs):
+            ret_before = analyze_info_flow(nets[run], data, params, full=True)  # Must do a full analysis
+            rets_before.append(ret_before)
+        joblib.dump(rets_before, params.analysis_file, compress=3)
+    else:
+        rets_before = joblib.load(params.analysis_file)
     #(z_mis, z_info_flows, z_info_flows_weighted,
     # y_mis, y_info_flows, y_info_flows_weighted, acc) = ret_before
 
@@ -249,48 +269,57 @@ if __name__ == '__main__':
     #plt.savefig('figures/weighted-flows-before.png')
     #plt.close()
 
-    accs = []
-    rets = []
-    biases = []
+    accs = [[] for _ in range(params.num_runs)]
+    rets = [[] for _ in range(params.num_runs)]
+    biases = [[] for _ in range(params.num_runs)]
     pfs = params.prune_factors
-    for pf in pfs:
-        print('------------------------------------------------')
-        print('Prune factor: %g' % pf)
-        print('------------------------------------------------\n')
+    for run in range(params.num_runs):
+        print('------------------')
+        print('Run %d' % run)
 
-        pruned_net = prune(net, ret_before[1], ret_before[4], prune_factor=pf,
-                           params=params)
+        # If the neural net save file or the analysis save file do not have a
+        # sufficient number of runs, the following two lines will throw an error
+        net = nets[run]
+        ret_before = rets_before[run]
+        for pf in pfs:
+            print('------')
+            print('Prune factor: %g' % pf)
 
-        # TODO: Important point: In order to make bias-acc tradeoff curves, we
-        # don't need to reanalyze the whole network. It suffices to measure
-        # the bias alone at the output. The rest is needed only for
-        # visualization, which is not a major focus right now.
-        #ret = analyze_info_flow(pruned_net, data, params, full=True)
-        #(z_mis, z_info_flows, z_info_flows_weighted,
-        # y_mis, y_info_flows, y_info_flows_weighted, acc) = ret
-        ret = analyze_info_flow(pruned_net, data, params, full=False)
-        z_mi, y_mi = ret
+            pruned_net = prune(net, ret_before[1], ret_before[4], prune_factor=pf,
+                               params=params)
 
-        #plot_ann(pruned_net.layer_sizes, z_info_flows_weighted)
-        #plt.title('Prune factor: %g' % pf)
-        #plt.savefig('figures/weighted-flows-pf%g.png' % pf)
+            # TODO: Important point: In order to make bias-acc tradeoff curves, we
+            # don't need to reanalyze the whole network. It suffices to measure
+            # the bias alone at the output. The rest is needed only for
+            # visualization, which is not a major focus right now.
+            #ret = analyze_info_flow(pruned_net, data, params, full=True)
+            #(z_mis, z_info_flows, z_info_flows_weighted,
+            # y_mis, y_info_flows, y_info_flows_weighted, acc) = ret
+            ret = analyze_info_flow(pruned_net, data, params, full=False)
+            z_mi, y_mi = ret
 
-        rets.append(ret)
+            #plot_ann(pruned_net.layer_sizes, z_info_flows_weighted)
+            #plt.title('Prune factor: %g' % pf)
+            #plt.savefig('figures/weighted-flows-pf%g.png' % pf)
 
-        # Raw accuracy from the neural network itself
-        #accs.append(acc)
-        # Accuracy based applying an SVM on top of the ANN's output
-        #accs.append(acc_from_mi(y_mis[2][(0,)]))  # If using a single output node
-        #accs.append(acc_from_mi(y_mis[2][(0, 1)]))  # If using a 1-hot encoded output
-        accs.append(acc_from_mi(y_mi))
+            rets[run].append(ret)
 
-        #biases.append(acc_from_mi(z_mis[2][(0,)]))  # If using a single output node
-        #biases.append(acc_from_mi(z_mis[2][(0, 1)]))  # If using a 1-hot encoded output
-        biases.append(acc_from_mi(z_mi))
+            # Raw accuracy from the neural network itself
+            #accs.append(acc)
+            # Accuracy based applying an SVM on top of the ANN's output
+            #accs.append(acc_from_mi(y_mis[2][(0,)]))  # If using a single output node
+            #accs.append(acc_from_mi(y_mis[2][(0, 1)]))  # If using a 1-hot encoded output
+            accs[run].append(acc_from_mi(y_mi))
 
-    # Append accuracies/biases for the before-pruning case
-    accs.append(acc_from_mi(ret_before[3][2][(0, 1)]))
-    biases.append(acc_from_mi(ret_before[0][2][(0, 1)]))
+            #biases.append(acc_from_mi(z_mis[2][(0,)]))  # If using a single output node
+            #biases.append(acc_from_mi(z_mis[2][(0, 1)]))  # If using a 1-hot encoded output
+            biases[run].append(acc_from_mi(z_mi))
+
+        # Append accuracies/biases for the before-pruning case
+        rets[run].append(ret_before)
+        accs[run].append(acc_from_mi(ret_before[3][2][(0, 1)]))
+        biases[run].append(acc_from_mi(ret_before[0][2][(0, 1)]))
+    print()
 
     file_params = (params.dataset, params.prune_metric, params.prune_method,
                    params.num_to_prune)

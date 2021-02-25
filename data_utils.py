@@ -21,7 +21,7 @@ def init_data(params, data=None):
     if dataset == 'tinyscm':
         # Load data if it exists; generate and save data otherwise
         if params.datafile is None or params.force_regenerate:
-            data.data = generate_data(params.num_data)
+            data.data = generate_data(params.num_data)  # TODO: Generate approx 30% more data, and then cut down to make classes balanced - might want to make the class balancing code a function
             print('Data generation complete')
             if params.datafile is not None:
                 joblib.dump(data.data, params.datafile, compress=3)
