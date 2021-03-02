@@ -7,11 +7,11 @@ mkdir -p "$results_dir"
 # Create outfiles to record start and end times and outputs of processes
 outfile_root="$results_dir/run-$(date '+%Y%m%d%H%M%S')"
 outfile="$outfile_root.out"
-echo -n "Start: " >$outfile
-echo $(date) >>$outfile
+echo -n "Start: " >"$outfile"
+echo $(date) >>"$outfile"
 
 # Whether to retrain and reanalyze the ANNs on the first iteration
-retrain_flag=1
+retrain_flag=0
 # How many trials to run
 runs=10
 
@@ -49,14 +49,16 @@ fi
 export MKL_NUM_THREADS=1
 i=0
 while IFS='-' read -a params; do  # Read and split params from file
+	echo -n "$i "
 	metric=${params[0]}
 	method=${params[1]}
 	pruneamt=${params[2]}
-	sem -j +0 --use-cpus-instead-of-cores ./analyze_info_flow.py -d $dataset --metric $metric --method $method --pruneamt $pruneamt --runs $runs >"$outfile_root-$i.out"
+	sem -j 8 python3 -u analyze_info_flow.py -d $dataset --metric $metric --method $method --pruneamt $pruneamt --runs $runs >"$outfile_root-$i.out"
 	let i=i+1
 done < "$results_dir/combos.txt"  # Input file for the while loop
+echo
 sem --wait
 
 # Record end time
-echo -n "Finished: " >>$outfile
-echo $(date) >>$outfile
+echo -n "Finished: " >>"$outfile"
+echo $(date) >>"$outfile"

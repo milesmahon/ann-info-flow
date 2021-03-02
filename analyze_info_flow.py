@@ -200,10 +200,9 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Information flow analysis and'
                                      +'bias removal by pruning on trained ANNs')
-    parser.add_argument('-d', '--dataset', choices=params.datasets,
-                        help='Dataset to use for analysis')
-    parser.add_argument('--metric', choices=params.prune_metrics)
-    parser.add_argument('--method', choices=params.prune_methods)
+    parser.add_argument('-d', '--dataset', choices=params.datasets, help='Dataset to use for analysis')
+    parser.add_argument('--metric', choices=params.prune_metrics, help='Choice of pruning metric')
+    parser.add_argument('--method', choices=params.prune_methods, help='Choice of pruning method')
     parser.add_argument('--pruneamt', help='Amount by which to prune')
     parser.add_argument('--runs', type=int, help='Number of times to run the analysis.')
     parser.add_argument('--retrain', action='store_true', help='Retrain the ANNs if set')
@@ -245,6 +244,8 @@ if __name__ == '__main__':
     if params.force_retrain or params.annfile is None:
         nets = []
         for run in range(params.num_runs):
+            print('------------------')
+            print('Run %d' % run)
             net = train_ann(data, params, test=False, random_seed=(1000+run))
             nets.append(net)
         #torch.save(net.state_dict(), params.annfile)
@@ -260,6 +261,8 @@ if __name__ == '__main__':
     if params.force_reanalyze or params.analysis_file is None:
         rets_before = []
         for run in range(params.num_runs):
+            print('------------------')
+            print('Run %d' % run)
             ret_before = analyze_info_flow(nets[run], data, params, full=True)  # Must do a full analysis
             rets_before.append(ret_before)
         joblib.dump(rets_before, params.analysis_file, compress=3)
