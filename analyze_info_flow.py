@@ -13,7 +13,7 @@ from param_utils import init_params
 from data_utils import init_data, generate_data
 from info_measures import (mutual_info_bin, compute_all_flows,
                            weight_info_flows, acc_from_mi)
-from pruning import prune
+from pruning import prune, edge_list, prune_edge
 from utils import powerset, print_mis, print_edge_data, print_node_data
 from nn import SimpleNet, train_ann
 from plot_utils import plot_ann
@@ -114,7 +114,8 @@ def analyze_info_flow(net, data, params, full=True):
         correct = (predictions == Y_test).sum()
         accuracy = correct / num_test
 
-        print('Accuracy: %.5g%%\n' % (100 * accuracy))
+        print('Accuracy: %.5g%%' % (100 * accuracy))
+        if full: print()
 
         # Extract intermediate activations from the network
         Xint = [actvn.numpy() for actvn in net.activations]
@@ -195,8 +196,10 @@ def print_data_stats(data):
 
 
 if __name__ == '__main__':
+    # TODO: Make params into a class
+    # The params defined below is used for setting argument choices, and default
+    # parameters if dataset is not given in arguments
     params = init_params()
-    # Set all default parameters in param_utils!
 
     parser = argparse.ArgumentParser(description='Information flow analysis and'
                                      +'bias removal by pruning on trained ANNs')
@@ -209,6 +212,12 @@ if __name__ == '__main__':
     parser.add_argument('--reanalyze', action='store_true', help='Reanalyze the ANNs if set')
     parser.add_argument('--train-only', action='store_true', help='Stop after training')
     parser.add_argument('--analyze-only', action='store_true', help='Stop after analysis')
+    parser.add_argument('--analysis', choices=['tradeoff', 'scaling'],
+                        help=('What analysis to perform: `tradeoff` for bias-accuracy tradeoff using '
+                              'different pruning strategies; `scaling` for analyzing how the effect of '
+                              'pruning edges scales with their accuracy/bias flows'))
+    parser.add_argument('-j', '--job', type=int, default=None,
+                        help='Job number (in 0 .. runs-1): when set, parallelizes over runs; expects `runs` number of jobs')
     args = parser.parse_args()
 
     print('\n------------------------------------------------')
@@ -217,7 +226,8 @@ if __name__ == '__main__':
 
     # Override params specified in param_utils, if given in CLI
     if args.dataset:
-        params.dataset = args.dataset
+        # Reinitialize params if the dataset is given
+        params = init_params(dataset=args.dataset)
     if args.metric:
         params.prune_metric = args.metric
     if args.method:
@@ -230,6 +240,12 @@ if __name__ == '__main__':
         params.force_retrain = True
     if args.reanalyze:
         params.force_reanalyze = True
+    if args.job is not None:
+        if args.job < 0 or args.job >= params.num_runs:
+            raise ValueError('`job` must be between 0 and `runs`-1')
+        runs_to_run = [args.job,]
+    else:
+        runs_to_run = range(params.num_runs)
 
     # NOTE: If the number of runs is >1, and params.force_retrain or
     # params.force_reanalyze are False, then the code will expect to find at least
@@ -248,11 +264,8 @@ if __name__ == '__main__':
             print('Run %d' % run)
             net = train_ann(data, params, test=False, random_seed=(1000+run))
             nets.append(net)
-        #torch.save(net.state_dict(), params.annfile)
         joblib.dump(nets, params.annfile, compress=3)
     else:
-        #net = SimpleNet()
-        #net.load_state_dict(torch.load(params.annfile))
         nets = joblib.load(params.annfile)
     if args.train_only:
         sys.exit(0)
@@ -278,62 +291,119 @@ if __name__ == '__main__':
     #plt.savefig('figures/weighted-flows-before.png')
     #plt.close()
 
-    accs = [[] for _ in range(params.num_runs)]
-    rets = [[] for _ in range(params.num_runs)]
-    biases = [[] for _ in range(params.num_runs)]
-    pfs = params.prune_factors
-    for run in range(params.num_runs):
-        print('------------------')
-        print('Run %d' % run)
+    if args.analysis == 'tradeoff':
+        # XXX: This won't work in parallel mode - we can't make accs/rets etc
+        # into numpy arrays if only one run gets saved. They will have to be
+        # defined differently.
+        accs = [[] for _ in range(params.num_runs)]
+        rets = [[] for _ in range(params.num_runs)]
+        biases = [[] for _ in range(params.num_runs)]
+        pfs = params.prune_factors
+        for run in runs_to_run:
+            print('------------------')
+            print('Run %d' % run)
 
-        # If the neural net save file or the analysis save file do not have a
-        # sufficient number of runs, the following two lines will throw an error
-        net = nets[run]
-        ret_before = rets_before[run]
-        for pf in pfs:
-            print('------')
-            print('Prune factor: %g' % pf)
+            # If the neural net save file or the analysis save file do not have a
+            # sufficient number of runs, the following two lines will throw an error
+            net = nets[run]
+            ret_before = rets_before[run]
+            for pf in pfs:
+                print('------')
+                print('Prune factor: %g' % pf)
 
-            pruned_net = prune(net, ret_before[1], ret_before[4], prune_factor=pf,
-                               params=params)
+                pruned_net = prune(net, ret_before[1], ret_before[4],
+                                   prune_factor=pf, params=params)
 
-            # TODO: Important point: In order to make bias-acc tradeoff curves, we
-            # don't need to reanalyze the whole network. It suffices to measure
-            # the bias alone at the output. The rest is needed only for
-            # visualization, which is not a major focus right now.
-            #ret = analyze_info_flow(pruned_net, data, params, full=True)
-            #(z_mis, z_info_flows, z_info_flows_weighted,
-            # y_mis, y_info_flows, y_info_flows_weighted, acc) = ret
-            ret = analyze_info_flow(pruned_net, data, params, full=False)
-            z_mi, y_mi = ret
+                # TODO: Important point: In order to make bias-acc tradeoff curves, we
+                # don't need to reanalyze the whole network. It suffices to measure
+                # the bias alone at the output. The rest is needed only for
+                # visualization, which is not a major focus right now.
+                #ret = analyze_info_flow(pruned_net, data, params, full=True)
+                #(z_mis, z_info_flows, z_info_flows_weighted,
+                # y_mis, y_info_flows, y_info_flows_weighted, acc) = ret
+                ret = analyze_info_flow(pruned_net, data, params, full=False)
+                z_mi, y_mi = ret
 
-            #plot_ann(pruned_net.layer_sizes, z_info_flows_weighted)
-            #plt.title('Prune factor: %g' % pf)
-            #plt.savefig('figures/weighted-flows-pf%g.png' % pf)
+                #plot_ann(pruned_net.layer_sizes, z_info_flows_weighted)
+                #plt.title('Prune factor: %g' % pf)
+                #plt.savefig('figures/weighted-flows-pf%g.png' % pf)
 
-            rets[run].append(ret)
+                rets[run].append(ret)
 
-            # Raw accuracy from the neural network itself
-            #accs.append(acc)
-            # Accuracy based applying an SVM on top of the ANN's output
-            #accs.append(acc_from_mi(y_mis[2][(0,)]))  # If using a single output node
-            #accs.append(acc_from_mi(y_mis[2][(0, 1)]))  # If using a 1-hot encoded output
-            accs[run].append(acc_from_mi(y_mi))
+                # Raw accuracy from the neural network itself
+                #accs.append(acc)
+                # Accuracy based applying an SVM on top of the ANN's output
+                #accs.append(acc_from_mi(y_mis[2][(0,)]))  # If using a single output node
+                #accs.append(acc_from_mi(y_mis[2][(0, 1)]))  # If using a 1-hot encoded output
+                accs[run].append(acc_from_mi(y_mi))
 
-            #biases.append(acc_from_mi(z_mis[2][(0,)]))  # If using a single output node
-            #biases.append(acc_from_mi(z_mis[2][(0, 1)]))  # If using a 1-hot encoded output
-            biases[run].append(acc_from_mi(z_mi))
+                #biases.append(acc_from_mi(z_mis[2][(0,)]))  # If using a single output node
+                #biases.append(acc_from_mi(z_mis[2][(0, 1)]))  # If using a 1-hot encoded output
+                biases[run].append(acc_from_mi(z_mi))
 
-        # Append accuracies/biases for the before-pruning case
-        rets[run].append(ret_before)
-        accs[run].append(acc_from_mi(ret_before[3][2][(0, 1)]))
-        biases[run].append(acc_from_mi(ret_before[0][2][(0, 1)]))
-    print()
+            # Append accuracies/biases for the before-pruning case
+            rets[run].append(ret_before)
+            accs[run].append(acc_from_mi(ret_before[3][2][(0, 1)]))
+            biases[run].append(acc_from_mi(ret_before[0][2][(0, 1)]))
+        print()
 
-    file_params = (params.dataset, params.prune_metric, params.prune_method,
-                   params.num_to_prune)
-    tradeoff_filename = ('results-%s/tradeoff-%s-%s-%d.npz' % file_params)
-    np.savez_compressed(tradeoff_filename, accs=np.array(accs),
-                        biases=np.array(biases), prune_factors=pfs)
-    rets_filename = ('results-%s/rets-%s-%s-%d.pkl' % file_params)
-    joblib.dump(dict(rets=rets, params=params), rets_filename, compress=3)
+        job_suffix = ('-%d' % args.job) if args.job is not None else '' # For savefiles
+        file_params = (params.dataset, params.prune_metric, params.prune_method,
+                       params.num_to_prune, job_suffix)
+        tradeoff_filename = ('results-%s/tradeoff-%s-%s-%d%s.npz' % file_params)
+        np.savez_compressed(tradeoff_filename, accs=np.array(accs),
+                            biases=np.array(biases), prune_factors=pfs)
+        rets_filename = ('results-%s/rets-%s-%s-%d%s.pkl' % file_params)
+        joblib.dump(dict(rets=rets, params=params), rets_filename, compress=3)
+
+    elif args.analysis == 'scaling':
+        # Analyze how the magnitude of information flow on a particular edge
+        # scales with the effect of intervening on that edge
+        orig_accs = []
+        orig_biases = []
+        # XXX: This won't work in parallel mode - we can't make delta_accs etc
+        # into numpy arrays if only one run gets saved. They will have to be
+        # defined differently.
+        delta_accs = [[] for _ in range(params.num_runs)]
+        delta_biases = [[] for _ in range(params.num_runs)]
+        bias_flows = []
+        acc_flows = []
+        for run in runs_to_run:
+            print('------------------')
+            print('Run %d' % run)
+
+            # If the neural net save file or the analysis save file do not have a
+            # sufficient number of runs, the following two lines will throw an error
+            net = nets[run]
+            ret_before = rets_before[run]
+
+            orig_bias = acc_from_mi(ret_before[0][2][(0, 1)])
+            orig_acc = acc_from_mi(ret_before[3][2][(0, 1)])
+            orig_biases.append(orig_bias)
+            orig_accs.append(orig_acc)
+
+            edges, bias_flow = edge_list(net, ret_before[2])
+            _, acc_flow = edge_list(net, ret_before[5])
+            bias_flows.append(bias_flow)
+            acc_flows.append(acc_flow)
+
+            for edge in edges:
+                print(edge)
+                pruned_net = prune_edge(net, *edge)
+                ret = analyze_info_flow(pruned_net, data, params, full=False)
+                z_mi, y_mi = ret
+                delta_biases[run].append(acc_from_mi(z_mi) - orig_bias)
+                delta_accs[run].append(acc_from_mi(y_mi) - orig_acc)
+                print()
+
+        job_suffix = ('-%d' % args.job) if args.job is not None else '' # For savefiles
+        tradeoff_filename = ('results-%s/scaling%s.npz' % (params.dataset, job_suffix))
+        np.savez_compressed(tradeoff_filename, orig_accs=np.array(orig_accs),
+                            orig_biases=np.array(orig_biases),
+                            delta_accs=np.array(delta_accs),
+                            delta_biases=np.array(delta_biases),
+                            acc_flows=np.array(acc_flows),
+                            bias_flows=np.array(bias_flows))
+
+    else:
+        raise ValueError('Unknown analysis %s' % args.analysis)

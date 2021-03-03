@@ -4,14 +4,21 @@ import torch.nn as nn
 
 
 # Initialize parameters
-def init_params(params=None):
+def init_params(params=None, dataset=None):
+    # TODO: Make this into a class. The initialization is safer to do that way
+
     # Create a new namespace only if one has not already been provided
     if params is None:
         params = SimpleNamespace()
 
     # Data parameters
     params.datasets = ['tinyscm', 'adult']
-    params.dataset = params.datasets[0]
+    if dataset is None:
+        params.dataset = params.datasets[0]
+    elif dataset in params.datasets:
+        params.dataset = dataset
+    else:
+        raise ValueError('Unrecognized dataset %s' % dataset)
 
     # Parameters specific to tinyscm
     params.num_data = 10000  # Should be moved to data.num_data etc at some point

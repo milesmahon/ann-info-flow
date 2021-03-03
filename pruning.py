@@ -8,6 +8,29 @@ from nn import SimpleNet
 from info_measures import weight_info_flows
 
 
+def edge_list(net, scores=None):
+    """
+    Make an array of all edges in a network. Optionally, make an additional
+    array of all edge scores provided in scores, prepared in the same order.
+    """
+
+    # Vectorize weighted ratios to create edge scores
+    edges = []
+    if scores: edge_scores = []
+    for k in range(net.num_layers - 1):
+        for i in range(net.layer_sizes[k]):
+            for j in range(net.layer_sizes[k+1]):
+                edges.append((k, i, j))
+                if scores: edge_scores.append(scores[k][j, i])
+    edges = np.array(edges)
+    if scores: edge_scores = np.array(edge_scores)
+
+    if scores:
+        return edges, edge_scores
+    else:
+        return edges
+
+
 def prune_edge(net, layer, i, j, prune_factor=0, return_copy=True):
     """
     Prunes an edge from neuron `i` to neuron `j` at a given `layer` in `net`
@@ -103,19 +126,10 @@ def prune_edges_proportional(net, z_info_flows, y_info_flows, num_edges=1, prune
     ratio_weighted = weight_info_flows(ratio, net.get_weights())
     # Note: weighted flows are still signed! Need to take abs() below.
 
-    # Vectorize weighted ratios to create edge scores
-    edges = []
-    edge_scores = []
-    for k in range(net.num_layers - 1):
-        for i in range(net.layer_sizes[k]):
-            for j in range(net.layer_sizes[k+1]):
-                edges.append((k, i, j))
-                edge_scores.append(abs(ratio_weighted[k][j, i]))
-    edges = np.array(edges)
-    edge_scores = np.array(edge_scores)
+    edges, edge_scores = edge_list(net, ratio_weighted)
 
     # Sort nodes by descending order of edge score
-    sort_inds = np.argsort(edge_scores)[::-1]
+    sort_inds = np.argsort(abs(edge_scores))[::-1]
     edges = edges[sort_inds]
 
     # Prune up to `num_edges` by prune_factor
