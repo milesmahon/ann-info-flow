@@ -212,7 +212,7 @@ if __name__ == '__main__':
     parser.add_argument('--reanalyze', action='store_true', help='Reanalyze the ANNs if set')
     parser.add_argument('--train-only', action='store_true', help='Stop after training')
     parser.add_argument('--analyze-only', action='store_true', help='Stop after analysis')
-    parser.add_argument('--analysis', choices=['tradeoff', 'scaling'],
+    parser.add_argument('--analysis', choices=['tradeoff', 'scaling'], default='tradeoff',
                         help=('What analysis to perform: `tradeoff` for bias-accuracy tradeoff using '
                               'different pruning strategies; `scaling` for analyzing how the effect of '
                               'pruning edges scales with their accuracy/bias flows'))
