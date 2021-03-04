@@ -1,4 +1,6 @@
 #!/bin/bash
+# Run ANN training; info flow analysis; tradeoff analysis; scaling analysis
+# All parallelization requires 'sem' from GNU parallel: sudo apt install parallel
 
 dataset="adult"
 results_dir="results-$dataset"
@@ -11,42 +13,30 @@ echo -n "Start: " >"$outfile"
 echo $(date) >>"$outfile"
 
 retrain_flag=0    # Retrain and reanalyze if set
-reanalyze_flag=1  # Reanalyze if set
+reanalyze_flag=0  # Reanalyze if set
 runs=10           # How many trials to run
 
-## Run analyze_info_flow.py for a combination of settings
-##methods=("edge")
-##metrics=("biasacc")
-##pruneamts=("6")
-#methods=("node" "edge")
-#metrics=("biasacc" "accbias")
-#pruneamts=("1" "2")
-#rm -f "$results_dir/combos-tmp.txt"
-#for method in "${methods[@]}"; do
-#    for metric in "${metrics[@]}"; do
-#        for num in "${pruneamts[@]}"; do
-#            if [ $retrain_flag == 1 ]; then
-#                ./analyze_info_flow.py -d $dataset --metric $metric --method $method --pruneamt $num --runs $runs --retrain --reanalyze
-#                retrain_flag=0
-#            else
-#                ./analyze_info_flow.py -d $dataset --metric $metric --method $method --pruneamt $num --runs $runs
-#            fi
-#            echo "${metric}-${method}-${num}" >> "$results_dir/combos-tmp.txt"
-#        done
-#    done
-#done
-## Overwrite the older combos file - doing this separately prevents overwriting in case the script was interrupted midway
-#mv "$results_dir/combos-tmp.txt" "$results_dir/combos.txt"
-
-# TODO: Need to have a way of parallelizing over runs, not only over parameter combinations
-# This needs to be fully done in advance of all parallel runs of pruning
-if [ $retrain_flag == 1 ] || [ $reanalyze_flag == 1 ]; then
-	# Retrain and reanalyze if retrain_flag is set; otherwise just reanalyze
-	if [ $retrain_flag == 1 ]; then retrain_arg="--retrain"; else retrain_arg=""; fi
-	python3 -u analyze_info_flow.py -d $dataset --runs $runs $retrain_arg --reanalyze --analyze-only | tee "$outfile_root-train.out"  # Should not have quotes around retrain arg here!
+# Train the ANNs (not parallelized)
+if [ $retrain_flag == 1 ]; then
+	echo "Training ANNs"
+	python3 -u nn.py -d $dataset --runs $runs | tee "$outfile_root-train.out"
 fi
 
-# Run analyze_info_flow.py in parallel (requires 'sem' from GNU parallel: sudo apt install parallel)
+# Run info flow analysis in parallel
+if [ $retrain_flag == 1 ] || [ $reanalyze_flag == 1 ]; then  # Retrain implies reanalyze
+	export MKL_NUM_THREADS=1
+	echo "Analyzing info flow in ANNs"
+	for (( j=0 ; j<$runs ; j=j+1 )); do
+		echo -n "$j "
+		sem -j 8 "python3 -u analyze_info_flow.py -d $dataset --runs $runs -j $j > $outfile_root-analyze-$j.out"
+	done
+	echo
+	echo "Waiting for jobs to complete..."
+	sem --wait
+	python3 -u analyze_info_flow.py -d $dataset --runs $runs --concatenate
+fi
+
+# Run tradeoff analysis in parallel
 export MKL_NUM_THREADS=1
 i=0
 while IFS='-' read -a params; do  # Read and split params from file
@@ -54,7 +44,7 @@ while IFS='-' read -a params; do  # Read and split params from file
 	metric=${params[0]}
 	method=${params[1]}
 	pruneamt=${params[2]}
-	sem -j 8 "python3 -u analyze_info_flow.py -d $dataset --metric $metric --method $method --pruneamt $pruneamt --runs $runs >$outfile_root-$i.out"
+	sem -j 8 "python3 -u tradeoff_analysis.py -d $dataset --metric $metric --method $method --pruneamt $pruneamt --runs $runs >$outfile_root-$i.out"
 	let i=i+1
 done < "$results_dir/combos.txt"  # Input file for the while loop
 echo

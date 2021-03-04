@@ -129,6 +129,27 @@ def init_data(params, data=None):
     return data
 
 
+def print_data_stats(data, params):
+    X, Y, Z = data.data[:3]
+    X = np.array(X)
+    Y = np.array(Y)
+    if data.dataset == 'adult': # Adult dataset: 0 for race; 1 for gender
+        Z = np.array(Z)[:, 1]
+    else:                       # Others (incl Tiny SCM): only one protected attr
+        Z = np.array(Z)
+
+    class_inds = [np.where((Y[:params.num_train] == 0) & (Z[:params.num_train] == 0))[0],  # Men, <50K
+                  np.where((Y[:params.num_train] == 1) & (Z[:params.num_train] == 0))[0],  # Men, >50K
+                  np.where((Y[:params.num_train] == 0) & (Z[:params.num_train] == 1))[0],  # Women, <50K
+                  np.where((Y[:params.num_train] == 1) & (Z[:params.num_train] == 1))[0]]  # Women, >50K
+    print([ci.size for ci in class_inds])
+    class_inds = [np.where((Y[params.num_train:] == 0) & (Z[params.num_train:] == 0))[0],  # Men, <50K
+                  np.where((Y[params.num_train:] == 1) & (Z[params.num_train:] == 0))[0],  # Men, >50K
+                  np.where((Y[params.num_train:] == 0) & (Z[params.num_train:] == 1))[0],  # Women, <50K
+                  np.where((Y[params.num_train:] == 1) & (Z[params.num_train:] == 1))[0]]  # Women, >50K
+    print([ci.size for ci in class_inds])
+
+
 def compute_y(uy, ug, alpha=1, offset=0):
     w = []
     for i, (u, v) in enumerate(zip(uy + offset, ug + offset)):

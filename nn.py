@@ -2,13 +2,17 @@
 
 from __future__ import print_function, division
 
+import argparse
+import joblib
 import numpy as np
-import matplotlib.pyplot as plt
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+
+from param_utils import init_params
+from data_utils import init_data, print_data_stats
 
 
 class SimpleNet(nn.Module):
@@ -117,3 +121,39 @@ def train_ann(data, params, test=False, random_seed=None):
         print('Accuracy: %d%%' % (100 * correct / num_test))
 
     return net
+
+
+if __name__ == '__main__':
+    params = init_params()
+
+    parser = argparse.ArgumentParser(description='Train ANN on a dataset')
+    parser.add_argument('-d', '--dataset', choices=params.datasets, help='Dataset to use for analysis')
+    parser.add_argument('--runs', type=int, help='Number of times to run the analysis.')
+    args = parser.parse_args()
+    # ANN training appears fast enough to not need parallelization;
+    # implement GPU if speed becomes an issue.
+
+    print('\n------------------------------------------------')
+    print(args)
+    print('------------------------------------------------\n')
+
+    # Override params specified in param_utils, if given in CLI
+    if args.dataset:
+        # Reinitialize params if the dataset is given
+        params = init_params(dataset=args.dataset)
+    if args.runs:
+        params.num_runs = args.runs
+
+    # For now, keep data fixed across runs
+    data = init_data(params)
+    print(params.num_data, params.num_train)
+    print_data_stats(data, params) # Check data statistics
+
+    # Train nets and save to file
+    nets = []
+    for run in range(params.num_runs):
+        print('------------------')
+        print('Run %d' % run)
+        net = train_ann(data, params, test=False, random_seed=(1000+run))
+        nets.append(net)
+    joblib.dump(nets, params.annfile, compress=3)
