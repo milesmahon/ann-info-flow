@@ -53,7 +53,7 @@ while IFS='-' read -a params; do  # Read and split params from file
 	metric=${params[0]}
 	method=${params[1]}
 	pruneamt=${params[2]}
-	sem -j 8 python3 -u analyze_info_flow.py -d $dataset --metric $metric --method $method --pruneamt $pruneamt --runs $runs >"$outfile_root-$i.out"
+	sem -j 8 "python3 -u analyze_info_flow.py -d $dataset --metric $metric --method $method --pruneamt $pruneamt --runs $runs >$outfile_root-$i.out"
 	let i=i+1
 done < "$results_dir/combos.txt"  # Input file for the while loop
 echo
