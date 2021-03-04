@@ -1,6 +1,6 @@
 #!/bin/bash
 
-dataset="tinyscm"
+dataset="adult"
 results_dir="results-$dataset"
 mkdir -p "$results_dir"
 
@@ -10,10 +10,9 @@ outfile="$outfile_root.out"
 echo -n "Start: " >"$outfile"
 echo $(date) >>"$outfile"
 
-# Whether to retrain and reanalyze the ANNs on the first iteration
-retrain_flag=0
-# How many trials to run
-runs=10
+retrain_flag=0    # Retrain and reanalyze if set
+reanalyze_flag=1  # Reanalyze if set
+runs=10           # How many trials to run
 
 ## Run analyze_info_flow.py for a combination of settings
 ##methods=("edge")
@@ -41,8 +40,10 @@ runs=10
 
 # TODO: Need to have a way of parallelizing over runs, not only over parameter combinations
 # This needs to be fully done in advance of all parallel runs of pruning
-if [ $retrain_flag == 1 ]; then
-	python3 -u analyze_info_flow.py -d $dataset --runs $runs --retrain --reanalyze --analyze-only | tee "$outfile_root-train.out"
+if [ $retrain_flag == 1 ] || [ $reanalyze_flag == 1 ]; then
+	# Retrain and reanalyze if retrain_flag is set; otherwise just reanalyze
+	if [ $retrain_flag == 1 ]; then retrain_arg="--retrain"; else retrain_arg=""; fi
+	python3 -u analyze_info_flow.py -d $dataset --runs $runs $retrain_arg --reanalyze --analyze-only | tee "$outfile_root-train.out"  # Should not have quotes around retrain arg here!
 fi
 
 # Run analyze_info_flow.py in parallel (requires 'sem' from GNU parallel: sudo apt install parallel)
