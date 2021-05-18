@@ -28,11 +28,11 @@ if [ $retrain_flag == 1 ] || [ $reanalyze_flag == 1 ]; then  # Retrain implies r
 	echo "Analyzing info flow in ANNs"
 	for (( j=0 ; j<$runs ; j=j+1 )); do
 		echo -n "$j "
-		sem -j 8 "python3 -u analyze_info_flow.py -d $dataset --runs $runs -j $j > $outfile_root-analyze-$j.out"
+		sem -j 8 --id analyze "python3 -u analyze_info_flow.py -d $dataset --runs $runs -j $j > $outfile_root-analyze-$j.out"
 	done
 	echo
 	echo "Waiting for jobs to complete..."
-	sem --wait
+	sem --wait --id analyze
 	python3 -u analyze_info_flow.py -d $dataset --runs $runs --concatenate
 fi
 
@@ -44,11 +44,11 @@ while IFS='-' read -a params; do  # Read and split params from file
 	metric=${params[0]}
 	method=${params[1]}
 	pruneamt=${params[2]}
-	sem -j 8 "python3 -u tradeoff_analysis.py -d $dataset --metric $metric --method $method --pruneamt $pruneamt --runs $runs >$outfile_root-$i.out"
+	sem -j 8 --id tradeoff "python3 -u tradeoff_analysis.py -d $dataset --metric $metric --method $method --pruneamt $pruneamt --runs $runs >$outfile_root-tradeoff-$i.out"
 	let i=i+1
 done < "$results_dir/combos.txt"  # Input file for the while loop
 echo
-sem --wait
+sem --wait --id tradeoff
 
 # Record end time
 echo -n "Finished: " >>"$outfile"
