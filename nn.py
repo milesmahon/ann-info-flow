@@ -15,6 +15,8 @@ from param_utils import init_params
 from data_utils import init_data, print_data_stats
 
 
+# TODO: Put this into a separate module, otherwise joblib complains. See
+# https://stackoverflow.com/questions/49621169/joblib-load-main-attributeerror
 class SimpleNet(nn.Module):
     """
     A simple neural network with no convolutional elements. It uses a
@@ -38,7 +40,7 @@ class SimpleNet(nn.Module):
         #x1 = torch.sigmoid(self.fc1(x0))
         #x2 = torch.sigmoid(self.fc2(x1))
         x1 = leaky_relu(self.fc1(x0))
-        x2 = leaky_relu(self.fc2(x1))
+        x2 = self.fc2(x1)
         self.activations = [x0, x1, x2]
         return x2
 
@@ -80,9 +82,15 @@ def train_ann(data, params, test=False, random_seed=None):
     net.train()
     criterion = params.criterion[data.dataset]
     optimizer = optim.SGD(net.parameters(), lr=learning_rate, momentum=momentum)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
 
     for epoch in range(num_epochs):
         running_loss = 0.0
+        avg_loss = 0.0
+
+        perm_inds = torch.randperm(X_train.shape[0])
+        X_train = X_train[perm_inds, :]
+        Y_train = Y_train[perm_inds, :]
 
         for i in range(params.num_train // minibatch_size):
             # Get minibatch from training data
@@ -100,10 +108,14 @@ def train_ann(data, params, test=False, random_seed=None):
 
             # Print statistics
             running_loss += loss.item()
-            if i % print_every == 0:
+            avg_loss += loss.item()
+            if i % print_every == print_every - 1:
                 print('[%d, %3d] loss: %.3f' %
-                      (epoch + 1, i, running_loss / minibatch_size))
+                      (epoch + 1, i, running_loss / (minibatch_size * print_every)))
                 running_loss = 0.0
+
+        avg_loss /= X_train.shape[0]
+        scheduler.step(avg_loss)
 
     print('Finished Training')
 
