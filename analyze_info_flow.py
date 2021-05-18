@@ -16,6 +16,9 @@ from info_measures import (mutual_info_bin, compute_all_flows,
 from utils import powerset, print_mis, print_edge_data, print_node_data
 from plot_utils import plot_ann
 
+from nn import SimpleNet  # Required for joblib.load to work
+# https://stackoverflow.com/questions/49621169/joblib-load-main-attributeerror
+
 
 def corrcoef(x, y):
     """
@@ -245,7 +248,7 @@ if __name__ == '__main__':
     for run in runs_to_run:
         print('------------------')
         print('Run %d' % run)
-        ret_before = analyze_info_flow(nets[run], data, params, full=True, test=False)  # Must do a full analysis
+        ret_before = analyze_info_flow(nets[run], data, params, full=True, test=True)  # Must do a full analysis
         rets_before.append(ret_before)
 
     filename, extension = params.analysis_file.rsplit('.', 1)
