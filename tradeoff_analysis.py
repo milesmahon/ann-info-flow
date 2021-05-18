@@ -108,7 +108,7 @@ if __name__ == '__main__':
             pruned_net = prune(net, ret_before[1], ret_before[4],
                                prune_factor=pf, params=params)
 
-            ret = analyze_info_flow(pruned_net, data, params, full=False, test=False)
+            ret = analyze_info_flow(pruned_net, data, params, full=False, test=True)
             z_mi, y_mi = ret
 
             rets[run_index].append(ret)

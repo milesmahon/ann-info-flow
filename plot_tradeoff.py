@@ -21,6 +21,8 @@ if __name__ == '__main__':
 
     tradeoff_files = ['tradeoff-%s.npz' % combo for combo in combos]
     colors = ['C0-o', 'C1-o', 'C0--s', 'C1--s', 'C2-o', 'C3-o', 'C2--s', 'C3--s']
+    #colors = ['C0-o', 'C1-o', 'C2-o', 'C3-o']
+    #colors = ['C3-o']
     legend = combos
 
     plt.figure()
@@ -51,8 +53,10 @@ if __name__ == '__main__':
     #ax.set_position([box.x0, box.y0, box.width * 0.9, box.height])
     #ax.legend(avg_lines, legend, title='Configuration', loc='center left',
     #          bbox_to_anchor=(1, 0.5), fontsize=12, title_fontsize=14)
-    ax.legend(avg_lines, legend, loc='best', title='Configuration', fontsize=12,
+    ax.legend(avg_lines, legend, loc='upper left', title='Configuration', fontsize=12,
               title_fontsize=14)
+    plt.axis('equal')
+    plt.grid(color=[0.9, 0.9, 0.9])
     plt.savefig(results_dir + '/bias-acc-tradeoff.png')
 
     plt.show()
