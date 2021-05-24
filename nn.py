@@ -127,8 +127,8 @@ def train_ann(data, params, test=False, random_seed=None):
 
         with torch.no_grad():
             Yhat = net(X_test)
-            predictions = (Yhat > 0.5)
-            correct = (predictions == Y_test).sum().item()
+            predictions = torch.argmax(Yhat, dim=1)
+            correct = (predictions == Y_test.squeeze(1)).sum().item()
 
         print('Accuracy: %d%%' % (100 * correct / num_test))
 
