@@ -34,8 +34,8 @@ def concatenate(params):
         delta_accs.append(data['delta_accs'])
         delta_biases.append(data['delta_biases'])
 
-    acc_flows = np.array(acc_flows)
-    bias_flows = np.array(bias_flows)
+    acc_flows = np.concatenate(acc_flows)
+    bias_flows = np.concatenate(bias_flows)
     delta_accs = np.concatenate(delta_accs)
     delta_biases = np.concatenate(delta_biases)
 
