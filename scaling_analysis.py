@@ -2,6 +2,7 @@
 
 from __future__ import print_function, division
 
+import sys
 import joblib
 import argparse
 import numpy as np
@@ -97,8 +98,8 @@ if __name__ == '__main__':
         net = nets[run]
         ret_before = rets_before[run]
 
-        orig_bias = acc_from_mi(ret_before[0][2][(0, 1)])
-        orig_acc = acc_from_mi(ret_before[3][2][(0, 1)])
+        orig_bias = acc_from_mi(ret_before[0][-1][(0, 1)])
+        orig_acc = acc_from_mi(ret_before[3][-1][(0, 1)])
         orig_biases.append(orig_bias)
         orig_accs.append(orig_acc)
 

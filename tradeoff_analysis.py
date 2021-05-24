@@ -122,8 +122,10 @@ if __name__ == '__main__':
 
         # Append accuracies/biases for the before-pruning case
         rets[run_index].append(ret_before)
-        accs[run_index].append(acc_from_mi(ret_before[3][2][(0, 1)]))
-        biases[run_index].append(acc_from_mi(ret_before[0][2][(0, 1)]))
+        accs[run_index].append(acc_from_mi(ret_before[3][-1][(0, 1)]))
+        biases[run_index].append(acc_from_mi(ret_before[0][-1][(0, 1)]))
+        #accs[run_index].append(acc_from_mi(max(ret_before[3][-1].values())))
+        #biases[run_index].append(acc_from_mi(max(ret_before[0][-1].values())))
     print()
 
     job_suffix = ('-%d' % args.job) if args.job is not None else ''
