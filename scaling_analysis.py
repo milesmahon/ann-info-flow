@@ -21,20 +21,27 @@ def concatenate(params):
     """
     Concatenate files from parallel runs
     """
+    acc_flows = []
+    bias_flows = []
     delta_accs = []
     delta_biases = []
     for run in range(params.num_runs):
         job_suffix = '-%d' % run
         tradeoff_filename = ('results-%s/scaling%s.npz' % (params.dataset, job_suffix))
         data = np.load(tradeoff_filename)
+        acc_flows.append(data['acc_flows'])
+        bias_flows.append(data['bias_flows'])
         delta_accs.append(data['delta_accs'])
         delta_biases.append(data['delta_biases'])
 
+    acc_flows = np.array(acc_flows)
+    bias_flows = np.array(bias_flows)
     delta_accs = np.concatenate(delta_accs)
     delta_biases = np.concatenate(delta_biases)
 
     tradeoff_filename = ('results-%s/scaling.npz' % params.dataset)
-    np.savez_compressed(tradeoff_filename, delta_accs=delta_accs, delta_biases=delta_biases)
+    np.savez_compressed(tradeoff_filename, acc_flows=acc_flows, bias_flows=bias_flows,
+                        delta_accs=delta_accs, delta_biases=delta_biases)
 
 
 if __name__ == '__main__':
