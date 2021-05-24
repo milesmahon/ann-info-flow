@@ -2,18 +2,22 @@
 # Run ANN training; info flow analysis; tradeoff analysis; scaling analysis
 # All parallelization requires 'sem' from GNU parallel: sudo apt install parallel
 
-dataset="adult"
+dataset="tinyscm"
 results_dir="results-$dataset"
 mkdir -p "$results_dir"
 
 # Create outfiles to record start and end times and outputs of processes
-outfile_root="$results_dir/run-$(date '+%Y%m%d%H%M%S')"
+outfile_root="$results_dir/run-$(date '+%Y%m%dT%H%M')"
 outfile="$outfile_root.out"
 echo -n "Start: " >"$outfile"
 echo $(date) >>"$outfile"
 
+export MKL_NUM_THREADS=1
+
 retrain_flag=0    # Retrain and reanalyze if set
 reanalyze_flag=0  # Reanalyze if set
+run_tradeoff=0    # Run tradeoff if set
+run_scaling=1     # Run scaling if set
 runs=10           # How many trials to run
 
 # Train the ANNs (not parallelized)
@@ -22,9 +26,8 @@ if [ $retrain_flag == 1 ]; then
 	python3 -u nn.py -d $dataset --runs $runs | tee "$outfile_root-train.out"
 fi
 
-# Run info flow analysis in parallel
+# Run info flow analysis, parallelized over runs
 if [ $retrain_flag == 1 ] || [ $reanalyze_flag == 1 ]; then  # Retrain implies reanalyze
-	export MKL_NUM_THREADS=1
 	echo "Analyzing info flow in ANNs"
 	for (( j=0 ; j<$runs ; j=j+1 )); do
 		echo -n "$j "
@@ -36,19 +39,33 @@ if [ $retrain_flag == 1 ] || [ $reanalyze_flag == 1 ]; then  # Retrain implies r
 	python3 -u analyze_info_flow.py -d $dataset --runs $runs --concatenate
 fi
 
-# Run tradeoff analysis in parallel
-export MKL_NUM_THREADS=1
-i=0
-while IFS='-' read -a params; do  # Read and split params from file
-	echo -n "$i "
-	metric=${params[0]}
-	method=${params[1]}
-	pruneamt=${params[2]}
-	sem -j 8 --id tradeoff "python3 -u tradeoff_analysis.py -d $dataset --metric $metric --method $method --pruneamt $pruneamt --runs $runs >$outfile_root-tradeoff-$i.out"
-	let i=i+1
-done < "$results_dir/combos.txt"  # Input file for the while loop
-echo
-sem --wait --id tradeoff
+# Run tradeoff analysis, parallelized over combos
+if [ $run_tradeoff == 1 ]; then
+	i=0
+	while IFS='-' read -a params; do  # Read and split params from file
+		echo -n "$i "
+		metric=${params[0]}
+		method=${params[1]}
+		pruneamt=${params[2]}
+		sem -j 8 --id tradeoff "python3 -u tradeoff_analysis.py -d $dataset --metric $metric --method $method --pruneamt $pruneamt --runs $runs >$outfile_root-tradeoff-$i.out"
+		let i=i+1
+	done < "$results_dir/combos.txt"  # Input file for the while loop
+	echo
+	sem --wait --id tradeoff
+fi
+
+# Run scaling analysis, parallelized over runs
+if [ $run_scaling == 1 ]; then
+	echo "Running scaling analysis"
+	for (( j=0 ; j<$runs ; j=j+1 )); do
+		echo -n "$j "
+		sem -j 8 --id scaling "python3 -u scaling_analysis.py -d $dataset --runs $runs -j $j > $outfile_root-analyze-$j.out"
+	done
+	echo
+	echo "Waiting for jobs to complete..."
+	sem --wait --id scaling
+	python3 -u scaling_analysis.py -d $dataset --runs $runs --concatenate
+fi
 
 # Record end time
 echo -n "Finished: " >>"$outfile"
