@@ -5,6 +5,7 @@ from __future__ import print_function, division
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.optimize as opt
+import scipy.linalg as la
 from scipy import stats
 
 from sklearn import preprocessing, svm, linear_model
@@ -12,8 +13,6 @@ from sklearn.pipeline import Pipeline
 from sklearn.model_selection import (GridSearchCV, RepeatedStratifiedKFold,
                                      cross_validate, RandomizedSearchCV)
 from sklearn.kernel_approximation import Nystroem, RBFSampler
-
-#import thundersvm
 
 from utils import powerset
 
@@ -59,18 +58,23 @@ def acc_from_mi(mi, Hx=1):
     return 1 - Hb_inv(Hx - mi)
 
 
-def mutual_info_bin(x, y, Hx=None, num_train=None, return_acc=False):
+def mutual_info_bin(x, y, Hx=None, num_train=None, return_acc=False, method=None):
     """
     Compute mutual information between x and y, where x is assumed to be a
     binary (0/1) random variable.
+
+    `method` refers to how mutual information is computed. It can be one of
+        ['kernel-svm', 'linear-svm', 'corr']
+    for a Kernel-SVM classifier, a Linear SVM classifier or a Correlation-based
+    approximation, respectively.
+
+    `num_train` is legacy and does nothing
     """
 
-    # XXX: Hx estimation is not correct - Hx is computed on an x that has not
-    # been re-scaled, whereas Hx_y is computed on a rescaled x - differential
-    # entropy is not immune to scaling - same scaling should be applied to both
-
-    # I don't know what the above complaint is referring to... X is not a
-    # continuous random variable, so H(X) is not differential entropy!
+    # x and y are exchanged from their usual positions here: x represents the
+    # "labels" and y represents the "features" in the classification problem
+    x = np.array(x)
+    y = np.array(y)
 
     # Use provided entropy of x, or compute from data
     if (type(Hx) is float or type(Hx) is int) and (0 <= Hx <= 1):
@@ -82,72 +86,71 @@ def mutual_info_bin(x, y, Hx=None, num_train=None, return_acc=False):
         raise ValueError('Hx should be a number between 0 and 1, or left as '
                          'None to be estimated from data')
 
-    # x and y are exchanged from their usual positions here: x represents the
-    # "labels" and y represents the "features" in the classification problem
-    x = np.array(x)
-    y = np.array(y)
-
-    num_total = x.size
-    if num_train is None:
-        num_train = int(0.75 * num_total)
-
-    # Classifier objects
-    scaler = preprocessing.StandardScaler()
-    #classifier = svm.SVC(kernel='rbf')
-    #classifier = thundersvm.SVC(kernel='rbf')
-    feature_map = Nystroem(n_components=100)
-    #feature_map = RBFSampler(n_components=100)
-    #classifier = svm.LinearSVC(dual=False)
-    classifier = linear_model.SGDClassifier(warm_start=True)
-    # For LinearSVC, always set dual=False if number of features is less than
-    # number of data points
-
-    # Hyperparameters
-    #Cs = np.logspace(-2, 2, 25)
-    # TODO: Use randomized grid search CV
-    #Cs = np.logspace(-2, 2, 5)
-    #gammas = np.logspace(-2, 2, 5)
-    C_dist = stats.loguniform(10**-2, 10**2)
-    gamma_dist = stats.loguniform(10**-2, 10**2)
-
-    num_train = x.size
+    if method is None:
+        method = 'kernel-svm'  # Use kernel SVM by default
 
     # Jointly train and test to estimate best classification accuracy
     outer_cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=1, random_state=73)
     inner_cv = RepeatedStratifiedKFold(n_splits=4, n_repeats=1, random_state=71)
 
-    #pipe = Pipeline(steps=[('scaler', scaler), ('svc', classifier)])
-    #estimator = GridSearchCV(pipe, dict(svc__C=Cs, svc__gamma=gammas),
-    #                         cv=inner_cv)
-    pipe = Pipeline(steps=[('scaler', scaler), ('fm', feature_map), ('svc', classifier)])
-    #estimator = GridSearchCV(pipe, dict(fm__gamma=gammas, svc__C=Cs,),
-    #                         cv=inner_cv)
-    #estimator = GridSearchCV(pipe, dict(fm__gamma=gammas, svc__alpha=Cs,),
-    #                         cv=inner_cv)
-    estimator = RandomizedSearchCV(pipe, dict(fm__gamma=gamma_dist, svc__alpha=C_dist),
-                                   cv=inner_cv, n_iter=25, random_state=53)
+    if method in ['kernel-svm', 'linear-svm']:
+        # Scaler is common to both methods
+        scaler = preprocessing.StandardScaler()
 
-    #import warnings
-    #with warnings.catch_warnings():
-    #    warnings.filterwarnings("ignore", message="Liblinear failed to converge")
-    cv_ret = cross_validate(estimator, y, x, cv=outer_cv, verbose=0,
-                            return_train_score=False)
+        if method == 'kernel-svm':
+            # Classifier objects
+            feature_map = Nystroem(n_components=100)
+            classifier = linear_model.SGDClassifier(warm_start=True)
+            # Hyperparameters
+            C_dist = stats.loguniform(10**-2, 10**2)
+            gamma_dist = stats.loguniform(10**-2, 10**2)
+            # Estimator object
+            pipe = Pipeline(steps=[('scaler', scaler), ('fm', feature_map), ('svc', classifier)])
+            estimator = RandomizedSearchCV(pipe, dict(fm__gamma=gamma_dist, svc__alpha=C_dist),
+                                           cv=inner_cv, n_iter=25, random_state=53)
+        elif method == 'linear-svm':
+            # For LinearSVC, always set dual=False if number of features is less than
+            # number of data points
+            classifier = svm.LinearSVC(dual=False)
+            # Hyperparameters
+            C_dist = stats.loguniform(10**-2, 10**2)
+            # Estimator object
+            pipe = Pipeline(steps=[('scaler', scaler), ('svc', classifier)])
+            estimator = RandomizedSearchCV(pipe, dict(svc__C=C_dist),
+                                           cv=inner_cv, n_iter=25, random_state=53)
+            #import warnings
+            #with warnings.catch_warnings():
+            #    warnings.filterwarnings("ignore", message="Liblinear failed to converge")
 
-    acc = cv_ret['test_score'].mean()
+        # Complete cross validation to estimate generalization performance
+        cv_ret = cross_validate(estimator, y, x, cv=outer_cv, verbose=0,
+                                return_train_score=False)
+        acc = cv_ret['test_score'].mean()
 
-    #cv_rets = []
-    #for train, test in outer_cv.split(y, x):
-    #    classifier = linear_model.SGDClassifier(warm_start=True)
-    #    pipe = Pipeline(steps=[('scaler', scaler), ('fm', feature_map), ('svc', classifier)])
-    #    estimator = GridSearchCV(pipe, dict(fm__gamma=gammas, svc__alpha=Cs,),
-    #                             cv=inner_cv)
-    #    estimator.fit(y[train], x[train])
-    #    cv_rets.append(estimator.score(y[test], x[test]))
-    #acc = np.array(cv_rets).mean()
+        # Compute conditional entropy of x given y, and mutual information
+        Hx_y = Hb(acc)
+        Ixy = max(Hx - Hx_y, 0)
 
-    # Compute conditional entropy of x given y, and mutual information
-    Hx_y = Hb(acc)
-    Ixy = max(Hx - Hx_y, 0)
+    elif method == 'corr':
+        # Compute the joint covariance matrix of X and Y
+        xy_mat = np.hstack((x.reshape((-1, 1)), y))
+        cov = np.cov(xy_mat, rowvar=False)
+        # Compute the covariance matrix for the product of marginals of X and Y
+        cov_indept = cov.copy()
+        cov_indept[0, 1:] = 0
+        cov_indept[1:, 0] = 0
+        # Compute mutual information (in nats) from the KL divergence formula
+        Ixy = 0.5 * (np.trace(la.solve(cov_indept, cov)) - cov.shape[0]
+                     + np.log(la.det(cov_indept) / la.det(cov)))
+        # Convert units to bits
+        Ixy /= np.log(2)
+        # Ensure that Ixy observes trivial bounds for binary variables
+        Ixy = max(Ixy, 0.0)
+        Ixy = min(Ixy, 1.0)
+        acc = acc_from_mi(Ixy)
+
+    else:
+        raise ValueError('Unknown method %s' % method)
 
     # Return mutual information
     if return_acc:
@@ -209,8 +212,6 @@ def weight_info_flows(all_flows, weights):
 
 
 if __name__ == '__main__':
-    import scipy.linalg as la
-
 
     def gen_random_orthogonal_matrix(d):
         A = np.random.randn(d, d)
@@ -247,6 +248,7 @@ if __name__ == '__main__':
 
     num_total = 200
     num_dims = 2
+    method = ['kernel-svm', 'linear-svm', 'corr'][2]
 
     max_accs = np.array([0.51, 0.6, 0.7, 0.8, 0.9, 0.99])
     mis = []
@@ -254,12 +256,13 @@ if __name__ == '__main__':
         print('%.2g: ' % max_acc, end='', flush=True)
 
         (y, x, Q) = gen_data(num_total, num_dims, max_acc)
-        actual_mi = 1 - Hb(max_acc)
-        est_mi, acc = mutual_info_bin(x, y.T, Hx=1, return_acc=True)
+        est_mi, acc = mutual_info_bin(x, y.T, Hx=1, return_acc=True,
+                                      method=method)
         mis.append(est_mi)
 
         print(acc, est_mi)
 
-    plt.plot(max_accs, 1 - Hb(max_accs))
+    actual_mis = 1 - Hb(max_accs)
+    plt.plot(max_accs, actual_mis)
     plt.plot(max_accs, mis)
     plt.show()
