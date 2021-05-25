@@ -2,6 +2,7 @@
 
 from __future__ import print_function, division
 
+import os
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
@@ -15,7 +16,15 @@ if __name__ == '__main__':
         params = init_params()
         dataset = params.dataset
 
+    if len(sys.argv) > 2:
+        subfolder = sys.argv[2]
+    else:
+        subfolder = ''
+
+    # subfolder = 'linear-svm'
     results_dir = 'results-%s' % dataset
+    results_subfolder = os.path.join(results_dir, subfolder)
+
     with open(results_dir + '/combos.txt') as f:
         combos = [line.strip() for line in f.readlines()]
 
@@ -23,18 +32,31 @@ if __name__ == '__main__':
     colors = ['C0-o', 'C1-o', 'C0--s', 'C1--s', 'C2-o', 'C3-o', 'C2--s', 'C3--s']
     #colors = ['C0-o', 'C1-o', 'C2-o', 'C3-o']
     #colors = ['C3-o']
-    legend = combos
+
+    legend = []
+    for combo in combos:
+        metric, method, num_prune = combo.split('-')
+        if metric == 'biasacc':
+            metric = 'Bias/Acc'
+        elif metric == 'accbias':
+            metric = 'Acc/Bias'
+        if method == 'node':
+            method = 'node(s)'
+        elif method == 'edge':
+            method = 'edge(s)'
+        legend.append('%s: %s %s' % (metric, num_prune, method))
 
     plt.figure()
 
     avg_lines = []
     for tradeoff_file, color in zip(tradeoff_files, colors):
-        data = np.load(results_dir + '/' + tradeoff_file)
+        data = np.load(results_subfolder + '/' + tradeoff_file)
         accs = data['accs']
         biases = data['biases']
         #plt.plot(biases.T, accs.T, color[:-1], alpha=0.5, linewidth=1)
         avg_line, = plt.plot(biases.mean(axis=0), accs.mean(axis=0), color)
         avg_lines.append(avg_line)
+    plt.plot(biases.mean(axis=0)[-1], accs.mean(axis=0)[-1], 'k*', markersize=15)
 
     #plt.axis('square')
     ax = plt.gca()
@@ -57,6 +79,6 @@ if __name__ == '__main__':
               title_fontsize=14)
     plt.axis('equal')
     plt.grid(color=[0.9, 0.9, 0.9])
-    plt.savefig(results_dir + '/bias-acc-tradeoff.png')
+    plt.savefig(results_subfolder + '/bias-acc-tradeoff.png')
 
     plt.show()
