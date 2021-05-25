@@ -140,8 +140,18 @@ def mutual_info_bin(x, y, Hx=None, num_train=None, return_acc=False, method=None
         cov_indept[0, 1:] = 0
         cov_indept[1:, 0] = 0
         # Compute mutual information (in nats) from the KL divergence formula
-        Ixy = 0.5 * (np.trace(la.solve(cov_indept, cov)) - cov.shape[0]
-                     + np.log(la.det(cov_indept) / la.det(cov)))
+        try:
+            reg = 0 * np.eye(cov.shape[0])  # Regularization matrix
+            Ixy = 0.5 * (np.trace(la.solve(cov_indept + reg, cov)) - cov.shape[0]
+                         + np.log(la.det(cov_indept + reg) / la.det(cov + reg)))
+        except:
+            # Two types of errors: la.LinAlgError if cov_indept is close to
+            # singular; ZeroDivisionError if cov is close to singular.
+            reg = 1e-10 * np.eye(cov.shape[0] - 1)  # Regularization matrix
+            sigma2 = cov[0, 0] - cov[0, 1:] @ la.solve(cov[1:, 1:] + reg, cov[0, 1:])
+            Hx_y = 0.5 * np.log(2*np.pi*np.e*sigma2)
+            Ixy = Hx - Hx_y
+
         # Convert units to bits
         Ixy /= np.log(2)
         # Ensure that Ixy observes trivial bounds for binary variables

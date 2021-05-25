@@ -166,6 +166,6 @@ if __name__ == '__main__':
     for run in range(params.num_runs):
         print('------------------')
         print('Run %d' % run)
-        net = train_ann(data, params, test=False, random_seed=(1000+run))
+        net = train_ann(data, params, test=True, random_seed=(1000+run))
         nets.append(net)
     joblib.dump(nets, params.annfile, compress=3)

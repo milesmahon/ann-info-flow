@@ -29,7 +29,7 @@ def concatenate(params, subfolder=''):
     for run in range(params.num_runs):
         job_suffix = '-%d' % run
         tradeoff_filename = os.path.join('results-%s' % params.dataset, subfolder,
-                                         'scaling%s.npz' % (params.dataset, job_suffix))
+                                         'scaling%s.npz' % job_suffix)
         data = np.load(tradeoff_filename)
         acc_flows.append(data['acc_flows'])
         bias_flows.append(data['bias_flows'])
