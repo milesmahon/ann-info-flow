@@ -3,6 +3,8 @@
 # All parallelization requires 'sem' from GNU parallel: sudo apt install parallel
 
 dataset="adult"
+info_meth="kernel-svm"
+
 results_dir="results-$dataset"
 mkdir -p "$results_dir"
 
@@ -16,11 +18,9 @@ export MKL_NUM_THREADS=1
 
 retrain_flag=0    # Retrain if set
 reanalyze_flag=1  # Reanalyze if set
-run_tradeoff=0    # Run tradeoff if set
-run_scaling=0     # Run scaling if set
+run_tradeoff=1    # Run tradeoff if set
+run_scaling=1     # Run scaling if set
 runs=10           # How many trials to run
-
-info_meth="corr"
 
 # Train the ANNs (not parallelized)
 if [ $retrain_flag == 1 ]; then
@@ -61,7 +61,7 @@ if [ $run_scaling == 1 ]; then
 	echo "Running scaling analysis"
 	for (( j=0 ; j<$runs ; j=j+1 )); do
 		echo -n "$j "
-		sem -j 8 --id scaling "python3 -u scaling_analysis.py -d $dataset --info-method $info_meth --subfolder $info_meth --runs $runs -j $j > $outfile_root-analyze-$j.out"
+		sem -j 8 --id scaling "python3 -u scaling_analysis.py -d $dataset --info-method $info_meth --subfolder $info_meth --runs $runs -j $j > $outfile_root-scaling-$j.out"
 	done
 	echo
 	echo "Waiting for jobs to complete..."
