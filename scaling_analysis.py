@@ -2,6 +2,7 @@
 
 from __future__ import print_function, division
 
+import os
 import sys
 import joblib
 import argparse
@@ -17,7 +18,7 @@ from nn import SimpleNet  # Required for joblib.load to work
 # https://stackoverflow.com/questions/49621169/joblib-load-main-attributeerror
 
 
-def concatenate(params):
+def concatenate(params, subfolder=''):
     """
     Concatenate files from parallel runs
     """
@@ -27,7 +28,8 @@ def concatenate(params):
     delta_biases = []
     for run in range(params.num_runs):
         job_suffix = '-%d' % run
-        tradeoff_filename = ('results-%s/scaling%s.npz' % (params.dataset, job_suffix))
+        tradeoff_filename = os.path.join('results-%s' % params.dataset, subfolder,
+                                         'scaling%s.npz' % (params.dataset, job_suffix))
         data = np.load(tradeoff_filename)
         acc_flows.append(data['acc_flows'])
         bias_flows.append(data['bias_flows'])
@@ -39,7 +41,7 @@ def concatenate(params):
     delta_accs = np.concatenate(delta_accs)
     delta_biases = np.concatenate(delta_biases)
 
-    tradeoff_filename = ('results-%s/scaling.npz' % params.dataset)
+    tradeoff_filename = os.path.join('results-%s' % params.dataset, subfolder, 'scaling.npz')
     np.savez_compressed(tradeoff_filename, acc_flows=acc_flows, bias_flows=bias_flows,
                         delta_accs=delta_accs, delta_biases=delta_biases)
 
@@ -55,6 +57,8 @@ if __name__ == '__main__':
     parser.add_argument('-j', '--job', type=int, default=None,
                         help='Job number (in 0 .. runs-1): when set, parallelizes over runs; expects `runs` number of jobs')
     parser.add_argument('--concatenate', action='store_true', help='Concatenate files from parallel runs and exit')
+    parser.add_argument('--info-method', choices=params.info_methods, default=None, help='Choice of information estimation method')
+    parser.add_argument('--subfolder', default='', help='Subfolder for results')
     args = parser.parse_args()
 
     print('\n------------------------------------------------')
@@ -73,9 +77,15 @@ if __name__ == '__main__':
         runs_to_run = [args.job,]
     else:
         runs_to_run = range(params.num_runs)
+    if args.info_method is not None:
+        params.info_method = args.info_method
+    if args.subfolder:
+        results_dir, filename = os.path.split(params.analysis_file)
+        params.analysis_file = os.path.join(results_dir, args.subfolder, filename)
+        os.makedirs(os.path.join(results_dir, args.subfolder), exist_ok=True)
     if args.concatenate:
-        concatenate(params)
-        sys.exit(1)
+        concatenate(params, args.subfolder)
+        sys.exit(0)
 
     # For now, keep data fixed across runs
     data = init_data(params)
@@ -125,7 +135,8 @@ if __name__ == '__main__':
             print()
 
     job_suffix = ('-%d' % args.job) if args.job is not None else '' # For savefiles
-    tradeoff_filename = ('results-%s/scaling%s.npz' % (params.dataset, job_suffix))
+    tradeoff_filename = os.path.join('results-%s' % params.dataset, args.subfolder,
+                                     'scaling%s.npz' % job_suffix)
     np.savez_compressed(tradeoff_filename, orig_accs=np.array(orig_accs),
                         orig_biases=np.array(orig_biases),
                         delta_accs=np.array(delta_accs),

@@ -47,6 +47,8 @@ def init_params(params=None, dataset=None):
     # Parameters for initial analysis of the ANN
     params.analysis_file = 'results-%s/analyzed-data.pkl' % params.dataset
     params.force_reanalyze = False
+    params.info_methods = ['kernel-svm', 'linear-svm', 'corr']
+    params.info_method = params.info_methods[0]
 
     # Parameters for pruning
     params.prune_metrics = ['biasacc', 'accbias']

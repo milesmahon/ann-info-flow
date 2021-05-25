@@ -2,6 +2,7 @@
 
 from __future__ import print_function, division
 
+import os
 import sys
 import joblib
 import argparse
@@ -35,7 +36,8 @@ def corrcoef(x, y):
     return cov / (sigma_x[:, None] * sigma_y)
 
 
-def compute_info_flows(Z_test, Xint, layer_sizes, header, weights, full=True, verbose=True):
+def compute_info_flows(Z_test, Xint, layer_sizes, header, weights, full=True,
+                       info_method=None, verbose=True):
     """
     Compute all information flows.
 
@@ -45,7 +47,7 @@ def compute_info_flows(Z_test, Xint, layer_sizes, header, weights, full=True, ve
     num_layers = len(layer_sizes)
 
     if full is not True:
-        z_mi, z_acc = mutual_info_bin(Z_test, Xint[-1], Hx=1, return_acc=True)
+        z_mi, z_acc = mutual_info_bin(Z_test, Xint[-1], Hx=1, return_acc=True, method=info_method)
         if verbose: print('Accuracy: %.4f' % z_acc)
         return z_mi
 
@@ -61,7 +63,7 @@ def compute_info_flows(Z_test, Xint, layer_sizes, header, weights, full=True, ve
             Xint[i] = Xint[i].reshape((-1, 1))
         for js in powerset(range(layer_sizes[i]), start=1):  # start=1 avoids the empty set
             z_mi, z_acc = mutual_info_bin(Z_test, Xint[i][:, js], Hx=1,
-                                          return_acc=True)
+                                          return_acc=True, method=info_method)
             z_mis[i][js] = z_mi
             if verbose: print('\t%.4f' % z_acc, end='', flush=True)
         if verbose: print()
@@ -88,7 +90,8 @@ def analyze_info_flow(net, data, params, full=True, test=True):
     If `full` is False, return bias and accuracy only for the final layer of
     the neural net (i.e., don't analyze flows).
 
-    If `test` is False, perform analysis on training data.
+    If `test` is False, perform info flow analysis on training data (should be
+    used only for debugging)
     """
     X, Y, Z = data.data[:3]
     X = np.array(X)
@@ -152,17 +155,21 @@ def analyze_info_flow(net, data, params, full=True, test=True):
 
     print('Computing bias flows...')
     if full:
-        ret = compute_info_flows(Z_test, Xint, layer_sizes, header, weights, full=full, verbose=True)
+        ret = compute_info_flows(Z_test, Xint, layer_sizes, header, weights,
+                                 full=full, info_method=params.info_method, verbose=True)
         z_mis, z_info_flows, z_info_flows_weighted = ret
     else:
-        z_mi = compute_info_flows(Z_test, Xint, layer_sizes, header, weights, full=full, verbose=True)
+        z_mi = compute_info_flows(Z_test, Xint, layer_sizes, header, weights,
+                                  full=full, info_method=params.info_method, verbose=True)
 
     print('Computing accuracy flows...')
     if full:
-        ret = compute_info_flows(Y_test, Xint, layer_sizes, header, weights, full=full, verbose=True)
+        ret = compute_info_flows(Y_test, Xint, layer_sizes, header, weights,
+                                 full=full, info_method=params.info_method, verbose=True)
         y_mis, y_info_flows, y_info_flows_weighted = ret
     else:
-        y_mi = compute_info_flows(Y_test, Xint, layer_sizes, header, weights, full=full, verbose=True)
+        y_mi = compute_info_flows(Y_test, Xint, layer_sizes, header, weights,
+                                  full=full, info_method=params.info_method, verbose=True)
 
     #plt.figure()
     #mask = (Yhat > 0.5)
@@ -211,6 +218,8 @@ if __name__ == '__main__':
     parser.add_argument('-j', '--job', type=int, default=None,
                         help='Job number (in 0 .. runs-1): when set, parallelizes over runs; expects `runs` number of jobs')
     parser.add_argument('--concatenate', action='store_true', help='Concatenate files from parallel runs and exit')
+    parser.add_argument('--info-method', choices=params.info_methods, default=None, help='Choice of information estimation method')
+    parser.add_argument('--subfolder', default='', help='Subfolder for results')
     args = parser.parse_args()
 
     print('\n------------------------------------------------')
@@ -229,9 +238,15 @@ if __name__ == '__main__':
         runs_to_run = [args.job,]
     else:
         runs_to_run = range(params.num_runs)
+    if args.info_method is not None:
+        params.info_method = args.info_method
+    if args.subfolder:
+        results_dir, filename = os.path.split(params.analysis_file)
+        params.analysis_file = os.path.join(results_dir, args.subfolder, filename)
+        os.makedirs(os.path.join(results_dir, args.subfolder), exist_ok=True)
     if args.concatenate:
         concatenate(params)
-        sys.exit(1)
+        sys.exit(0)
 
     # For now, keep data fixed across runs
     data = init_data(params)
@@ -248,7 +263,8 @@ if __name__ == '__main__':
     for run in runs_to_run:
         print('------------------')
         print('Run %d' % run)
-        ret_before = analyze_info_flow(nets[run], data, params, full=True, test=True)  # Must do a full analysis
+        # Must do a full analysis the first time around
+        ret_before = analyze_info_flow(nets[run], data, params, full=True)
         rets_before.append(ret_before)
 
     filename, extension = params.analysis_file.rsplit('.', 1)

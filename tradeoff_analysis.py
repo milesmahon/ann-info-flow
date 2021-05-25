@@ -2,6 +2,8 @@
 
 from __future__ import print_function, division
 
+import os
+import sys
 import joblib
 import argparse
 import numpy as np
@@ -21,6 +23,7 @@ def concatenate(params):
     Concatenate files from parallel runs
     """
     #filename, extension = params.analysis_file.rsplit('.', 1)
+    # XXX: This doesn't work currently
 
     rets_before = []
     for run in range(params.num_runs):
@@ -46,6 +49,8 @@ if __name__ == '__main__':
     parser.add_argument('-j', '--job', type=int, default=None,
                         help='Job number (in 0 .. runs-1): when set, parallelizes over runs; expects `runs` number of jobs')
     parser.add_argument('--concatenate', action='store_true', help='Concatenate files from parallel runs and exit')
+    parser.add_argument('--info-method', choices=params.info_methods, default=None, help='Choice of information estimation method')
+    parser.add_argument('--subfolder', default='', help='Subfolder for results')
     args = parser.parse_args()
 
     print('\n------------------------------------------------')
@@ -70,9 +75,15 @@ if __name__ == '__main__':
         runs_to_run = [args.job,]
     else:
         runs_to_run = range(params.num_runs)
+    if args.info_method is not None:
+        params.info_method = args.info_method
+    if args.subfolder:
+        results_dir, filename = os.path.split(params.analysis_file)
+        params.analysis_file = os.path.join(results_dir, args.subfolder, filename)
+        os.makedirs(os.path.join(results_dir, args.subfolder), exist_ok=True)
     if args.concatenate:
         concatenate(params)
-        sys.exit(1)
+        sys.exit(0)
 
     # NOTE: If the number of runs is >1, and params.force_retrain or
     # params.force_reanalyze are False, then the code will expect to find at least
@@ -108,7 +119,7 @@ if __name__ == '__main__':
             pruned_net = prune(net, ret_before[1], ret_before[4],
                                prune_factor=pf, params=params)
 
-            ret = analyze_info_flow(pruned_net, data, params, full=False, test=True)
+            ret = analyze_info_flow(pruned_net, data, params, full=False)
             z_mi, y_mi = ret
 
             rets[run_index].append(ret)
@@ -129,12 +140,14 @@ if __name__ == '__main__':
     print()
 
     job_suffix = ('-%d' % args.job) if args.job is not None else ''
-    file_params = (params.dataset, params.prune_metric, params.prune_method,
+    file_params = (params.prune_metric, params.prune_method,
                    params.num_to_prune, job_suffix)
 
-    tradeoff_filename = ('results-%s/tradeoff-%s-%s-%d%s.npz' % file_params)
+    tradeoff_filename = os.path.join('results-%s' % params.dataset, args.subfolder,
+                                     'tradeoff-%s-%s-%d%s.npz' % file_params)
     np.savez_compressed(tradeoff_filename, accs=np.array(accs),
                         biases=np.array(biases), prune_factors=pfs)
 
-    rets_filename = ('results-%s/rets-%s-%s-%d%s.pkl' % file_params)
+    rets_filename = os.path.join('results-%s' % params.dataset, args.subfolder,
+                                 'rets-%s-%s-%d%s.pkl' % file_params)
     joblib.dump(dict(rets=rets, params=params), rets_filename, compress=3)
