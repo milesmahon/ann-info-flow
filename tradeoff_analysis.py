@@ -22,8 +22,9 @@ def concatenate(params):
     """
     Concatenate files from parallel runs
     """
-    #filename, extension = params.analysis_file.rsplit('.', 1)
     # XXX: This doesn't work currently
+    raise NotImplementedError
+    #filename, extension = params.analysis_file.rsplit('.', 1)
 
     rets_before = []
     for run in range(params.num_runs):

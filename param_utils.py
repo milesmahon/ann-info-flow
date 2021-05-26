@@ -52,8 +52,8 @@ def init_params(params=None, dataset=None):
 
     # Parameters for pruning
     params.prune_metrics = ['biasacc', 'accbias']
-    params.prune_methods = ['node', 'edge', 'edge-rwf']
-    params.prune_metric = params.prune_metrics[1]
+    params.prune_methods = ['node', 'edge', 'path']
+    params.prune_metric = params.prune_metrics[0]
     params.prune_method = params.prune_methods[1]
     params.num_to_prune = 2  # Number of nodes or edges to prune
     params.prune_factors = np.linspace(0, 1, 10, endpoint=False)

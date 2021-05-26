@@ -142,6 +142,63 @@ def prune_edges_proportional(net, z_info_flows, y_info_flows, num_edges=1, prune
     return pruned_net
 
 
+def prune_path(net, z_info_flows, y_info_flows, num_paths=1, prune_factor=0, accbias=False):
+    """
+    Prune edges by identifying the "information path" carrying the largest flow
+    """
+
+    # Compute biasacc or accbias ratio, and weight it
+    ratio = [None,] * net.num_layers
+    for k in range(net.num_layers):
+        if accbias:
+            ratio[k] = y_info_flows[k] / z_info_flows[k]
+        else:
+            ratio[k] = z_info_flows[k] / y_info_flows[k]
+    ratio_weighted = weight_info_flows(ratio, net.get_weights())
+    # Note: weighted flows are still signed! Need to take abs() below.
+
+    edges, flows = edge_list(net, ratio_weighted)
+    flows = abs(flows)
+    edges_tuple = [tuple(e) for e in edges]  # Convert into a list of tuples
+    flows_dict = dict(zip(edges_tuple, flows))
+
+    # Set of all paths, identified by (node_in_layer_0, node_in_layer_1, ...)
+    a = np.array(np.meshgrid(*[range(k) for k in net.layer_sizes], indexing='ij'))  # All points in a 3D grid within the given ranges
+    a = np.rollaxis(a, 0, 4)                                                        # Make the 0th axis into the last axis
+    path_nodes = a.reshape((-1, net.num_layers))                                    # Now you can safely reshape while preserving order
+
+    # Set of all paths, identified by edges
+    path_edges = []
+    for path in path_nodes:
+        path_edge = []
+        for i in range(len(path) - 1):
+            path_edge.append((i, path[i], path[i+1]))
+        path_edges.append(path_edge)
+
+    # Find min of weights of edges in each path
+    path_weights = [min(flows_dict[edge] for edge in path) for path in path_edges]
+    path_weights = np.array(path_weights)
+    # Find indices to sort path weights in descending order
+    sort_inds = np.argsort(path_weights)[::-1]
+
+    if prune_factor < 0.01:
+        print(path_weights[sort_inds])
+
+    # Prune up to `num_paths` by prune_factor
+    # NOTE: It really doesn't make sense to prune multiple paths right now. If
+    # two paths overlap, then the common edges will suffer squared pruning
+    pruned_net = SimpleNet()
+    pruned_net.load_state_dict(net.state_dict())
+    for ind in sort_inds[:num_paths]:
+        edges = path_edges[ind]          # Pick all edges in the path
+        #edges = [path_edges[ind][-1],]  # Pick only the edge at the final layer: works okay, but doesn't do enough
+        for k, i, j in edges:
+            pruned_net = prune_edge(pruned_net, k, i, j, prune_factor=prune_factor,
+                                    return_copy=False)
+
+    return pruned_net
+
+
 def prune(net, z_info_flows, y_info_flows, prune_factor, params):
     """
     Prune ANN based on the method and metric specified in params
@@ -156,6 +213,10 @@ def prune(net, z_info_flows, y_info_flows, prune_factor, params):
         return prune_edges_proportional(net, z_info_flows, y_info_flows,
                                         num_edges=params.num_to_prune,
                                         prune_factor=prune_factor, accbias=accbias)
+    elif params.prune_method == 'path':
+        return prune_path(net, z_info_flows, y_info_flows,
+                          num_paths=params.num_to_prune,
+                          prune_factor=prune_factor, accbias=accbias)
     else:
         raise NotImplementedError()
 
