@@ -51,7 +51,7 @@ def init_params(params=None, dataset=None):
     params.info_method = params.info_methods[0]
 
     # Parameters for pruning
-    params.prune_metrics = ['biasacc', 'accbias']
+    params.prune_metrics = ['biasacc', 'accbias', 'random']
     params.prune_methods = ['node', 'edge', 'path']
     params.prune_metric = params.prune_metrics[0]
     params.prune_method = params.prune_methods[1]

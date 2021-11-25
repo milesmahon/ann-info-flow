@@ -74,6 +74,49 @@ def prune_node(net, layer, i, prune_factor=0, return_copy=True):
     return pruned_net
 
 
+def prune_edges_random(net, num_edges=1, prune_factor=0):
+    """
+    Prune `num_edges` randomly from the network.
+    """
+
+    edges = edge_list(net)
+    # Choose edges at random to prune
+    rng = np.random.default_rng()
+    edge_ids_to_prune = rng.choice(edges.shape[0], num_edges, replace=False)
+
+    pruned_net = SimpleNet()
+    pruned_net.load_state_dict(net.state_dict())
+    for k, i, j in edges[edge_ids_to_prune]:
+        pruned_net = prune_edge(pruned_net, k, i, j, prune_factor=prune_factor,
+                                return_copy=False)
+
+    return pruned_net
+
+
+def prune_nodes_random(net, num_nodes=1, prune_factor=0):
+    """
+    Prune `num_nodes` randomly from the network.
+    """
+
+    node_list = []
+    for k in range(net.num_layers - 1):
+        node_list.append([k, i] for i in range(net.layer_sizes[k]))
+    node_list = np.array(node_list)
+    print(node_list)
+
+    # Choose nodes at random to prune
+    rng = np.random.default_rng()
+    node_ids_to_prune = rng.choice(node_list.shape[0], num_nodes, replace=False)
+
+    pruned_net = SimpleNet()
+    pruned_net.load_state_dict(net.state_dict())
+    for k, i in node_list[node_ids_to_prune]:
+        pruned_net = prune_node(pruned_net, k, i, prune_factor=prune_factor,
+                                return_copy=False)
+
+    return pruned_net
+
+
 def prune_nodes_biasacc(net, z_info_flows, y_info_flows, num_nodes=1, prune_factor=0, accbias=False):
     """
     Prune nodes in decreasing order of bias-to-accuracy or accuracy-to-bias ratio.
@@ -164,7 +207,7 @@ def prune_path(net, z_info_flows, y_info_flows, num_paths=1, prune_factor=0, acc
 
     # Set of all paths, identified by (node_in_layer_0, node_in_layer_1, ...)
     a = np.array(np.meshgrid(*[range(k) for k in net.layer_sizes], indexing='ij'))  # All points in a 3D grid within the given ranges
-    a = np.rollaxis(a, 0, 4)                                                        # Make the 0th axis into the last axis
+    a = np.rollaxis(a, 0, net.num_layers+1)                                         # Make the 0th axis into the last axis
     path_nodes = a.reshape((-1, net.num_layers))                                    # Now you can safely reshape while preserving order
 
     # Set of all paths, identified by edges
@@ -204,6 +247,16 @@ def prune(net, z_info_flows, y_info_flows, prune_factor, params):
     Prune ANN based on the method and metric specified in params
     """
     accbias = (params.prune_metric == 'accbias')
+
+    if params.prune_metric == 'random':
+        if params.prune_method == 'node':
+            return prune_nodes_random(net, num_nodes=params.num_to_prune,
+                                      prune_factor=prune_factor)
+        elif params.prune_method == 'edge':
+            return prune_edges_random(net, num_edges=params.num_to_prune,
+                                      prune_factor=prune_factor)
+        else:
+            raise NotImplementedError()
 
     if params.prune_method == 'node':
         return prune_nodes_biasacc(net, z_info_flows, y_info_flows,
