@@ -2,7 +2,7 @@
 # Run ANN training; info flow analysis; tradeoff analysis; scaling analysis
 # All parallelization requires 'sem' from GNU parallel: sudo apt install parallel
 
-dataset="adult"
+dataset="tinyscm"
 info_meth="kernel-svm"
 
 results_dir="results-$dataset"
@@ -17,10 +17,10 @@ echo $(date) >>"$outfile"
 export MKL_NUM_THREADS=1
 
 retrain_flag=0    # Retrain if set
-reanalyze_flag=1  # Reanalyze if set
+reanalyze_flag=0  # Reanalyze if set
 run_tradeoff=1    # Run tradeoff if set
-run_scaling=1     # Run scaling if set
-runs=10           # How many trials to run
+run_scaling=0     # Run scaling if set
+runs=100          # How many trials to run
 
 # Train the ANNs (not parallelized)
 if [ $retrain_flag == 1 ]; then

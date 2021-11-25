@@ -93,7 +93,7 @@ if __name__ == '__main__':
     plt.plot(acc_flow_meas[layers == 1], delta_accs[layers == 1], color=colors[1], **line_kwargs)
     # Compute regression lines for delta_acc & delta_bias vs. resp flow
     slope, intercept, rval0 = stats.linregress(acc_flow_meas[layers == 0], delta_accs[layers == 0])[:3]
-    x = np.r_[min(acc_flow_meas), max(acc_flow_meas)]
+    x = np.r_[min(acc_flow_meas), 0.5 * max(acc_flow_meas)]
     plt.plot(x, slope * x + intercept, color='darkgrey')
     slope, intercept, rval1 = stats.linregress(acc_flow_meas[layers == 1], delta_accs[layers == 1])[:3]
     x = np.r_[min(acc_flow_meas), max(acc_flow_meas)]
@@ -106,8 +106,8 @@ if __name__ == '__main__':
     plt.xlabel(r'Weighted accuracy flow, $\mathcal{F}_Y(E_t)$', **label_kwargs)
     plt.ylabel('Change in output acc upon pruning\n(new acc - old acc, %-points)', **label_kwargs)
     plt.gca().tick_params(axis='both', which='major', labelsize=ticksize)
-    plt.text(0.95, 0.05, '$R^2_1 = %.2f$\n$R^2_2 = %.2f$' % (rval0**2, rval1**2), fontsize=16,
-             horizontalalignment='right', verticalalignment='bottom', transform=ax.transAxes)
+    plt.text(0.05, 0.05, '$R^2_1 = %.2f$\n$R^2_2 = %.2f$' % (rval0**2, rval1**2), fontsize=16,
+             horizontalalignment='left', verticalalignment='bottom', transform=ax.transAxes)
     plt.tight_layout()
 
     plt.figure()
@@ -131,9 +131,59 @@ if __name__ == '__main__':
     plt.title('$\Delta_{bias}$ vs. weighted bias flow\n(Dataset: %s, MI est: %s)' % (dataset, info_method), **title_kwargs)
     plt.xlabel(r'Weighted bias flow, $\mathcal{F}_Z(E_t)$', **label_kwargs)
     plt.ylabel('Change in output bias upon pruning\n(new bias - old bias; %-points)', **label_kwargs)
+    plt.text(0.05, 0.05, '$R^2_1 = %.2f$\n$R^2_2 = %.2f$' % (rval0**2, rval1**2), fontsize=16,
+             horizontalalignment='left', verticalalignment='bottom', transform=ax.transAxes)
     plt.gca().tick_params(axis='both', which='major', labelsize=ticksize)
-    plt.text(0.95, 0.95, '$R^2_1 = %.2f$\n$R^2_2 = %.2f$' % (rval0**2, rval1**2), fontsize=16,
-             horizontalalignment='right', verticalalignment='top', transform=ax.transAxes)
     plt.tight_layout()
+
+    ## Plot acc/bias change against signed weighted information flow measures
+    #plt.figure()
+    #plt.plot(acc_flows, delta_accs, 'C0o')
+    #plt.title('$\Delta_{acc}$ vs signed weighted acc flow\n(%s dataset)' % dataset, **title_kwargs)
+    #plt.xlabel('Signed weighted accuracy flow', **label_kwargs)
+    #plt.ylabel('Change in output acc upon pruning\n(new acc - old acc)', **label_kwargs)
+    #plt.tight_layout()
+
+    #plt.figure()
+    #plt.plot(bias_flows, delta_biases, 'C1o')
+    #plt.title('$\Delta_{bias}$ vs signed weighted bias flow\n(%s dataset)' % dataset, **title_kwargs)
+    #plt.xlabel('Signed weighted bias flow', **label_kwargs)
+    #plt.ylabel('Change in output bias upon pruning\n(new bias - old bias)', **label_kwargs)
+    #plt.tight_layout()
+
+    ## Plot acc/bias change against acc/bias ratio
+    #plt.figure()
+    #acc_flow_meas = np.log10(abs(acc_flows) / abs(bias_flows) / abs(weights))
+    ##plt.plot(abs(acc_flows) - abs(bias_flows), delta_accs, 'C0o')
+    #plt.plot(acc_flow_meas[layers == 0], delta_accs[layers == 0], 'C0o', alpha=0.3)
+    #plt.plot(acc_flow_meas[layers == 1], delta_accs[layers == 1], 'C0o')
+    #plt.title('$\Delta_{acc}$ vs acc/bias flow ratio\n(%s dataset)' % dataset, **title_kwargs)
+    #plt.xlabel('log_10(Acc / (|Weight| * bias flow))', **label_kwargs)
+    #plt.ylabel('Change in output acc upon pruning\n(new acc - old acc)', **label_kwargs)
+    #plt.tight_layout()
+
+    ## Plot acc/bias change against bias/acc ratio
+    #plt.figure()
+    #bias_flow_meas = np.log10(abs(weights) * abs(bias_flows) / abs(acc_flows))
+    ##plt.plot(abs(bias_flows) - abs(acc_flows), delta_biases, 'C1o')
+    #plt.plot(bias_flow_meas[layers == 0], delta_biases[layers == 0], 'C1o', alpha=0.3)
+    #plt.plot(bias_flow_meas[layers == 1], delta_biases[layers == 1], 'C1o')
+    #plt.title('$\Delta_{bias}$ vs bias/acc flow ratio\n(%s dataset)' % dataset, **title_kwargs)
+    #plt.xlabel('log_10(|Weight| * Bias / Acc flow)', **label_kwargs)
+    #plt.ylabel('Change in output bias upon pruning\n(new bias - old bias)', **label_kwargs)
+    #plt.tight_layout()
+
+    # TODO: Plot weighted acc/bias flow ratios - to do this, it would be easier
+    # to just load from the analyzed-data file directly.
+
+    ## Plot edge-wise accuracies and biases in a 2D scatter plot; color by run
+    #plt.figure()
+    ##inds = (data['bias_flows'] > 0) & (data['acc_flows'] > 0)
+    ##plt.plot(data['bias_flows'][inds].squeeze(), data['acc_flows'][inds].squeeze(), 'o')
+    #plt.plot((data['bias_flows'].squeeze() / weights).T, (data['acc_flows'].squeeze() / weights).T, 'o')
+    #plt.title('Accuracy and Bias flows for every edge', **title_kwargs)
+    #plt.xlabel('Bias', **label_kwargs)
+    #plt.ylabel('Accuracy', **label_kwargs)
+    #plt.tight_layout()
 
     plt.show()
