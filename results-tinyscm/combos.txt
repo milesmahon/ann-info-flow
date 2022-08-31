@@ -1,8 +1,8 @@
-biasacc-node-1
-biasacc-node-2
-accbias-node-1
-accbias-node-2
-biasacc-edge-3
-biasacc-edge-4
-accbias-edge-3
-accbias-edge-4
+biasacc-edge-9
+biasacc-path-1
+biasacc-path-2
+biasacc-path-3
+accbias-edge-9
+accbias-path-1
+accbias-path-2
+accbias-path-3
