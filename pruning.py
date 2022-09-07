@@ -100,9 +100,8 @@ def prune_nodes_random(net, num_nodes=1, prune_factor=0):
 
     node_list = []
     for k in range(net.num_layers - 1):
-        node_list.append([k, i] for i in range(net.layer_sizes[k]))
+        node_list.extend([[k, i] for i in range(net.layer_sizes[k])])
     node_list = np.array(node_list)
-    print(node_list)
 
     # Choose nodes at random to prune
     rng = np.random.default_rng()

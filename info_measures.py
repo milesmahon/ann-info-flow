@@ -15,10 +15,8 @@ from sklearn.model_selection import (GridSearchCV, RepeatedStratifiedKFold,
 from sklearn.kernel_approximation import Nystroem, RBFSampler
 
 from utils import powerset
-
 import warnings
 warnings.filterwarnings('error')
-
 
 def Hb(p):
     """Binary entropy function."""
@@ -146,17 +144,15 @@ def mutual_info_bin(x, y, Hx=None, num_train=None, return_acc=False, method=None
         try:
             reg = 0 * np.eye(cov.shape[0])  # Regularization matrix
             Ixy = 0.5 * (np.trace(la.solve(cov_indept + reg, cov, assume_a='sym')) - cov.shape[0]
-                         + np.log(la.det(cov_indept + reg) / la.det(cov + reg)))
+                         + np.log(la.det(cov_indept + reg) / la.det(cov + reg))) + 1e-10
         except:
             # Two types of errors: la.LinAlgError if cov_indept is close to
             # singular; ZeroDivisionError if cov is close to singular.
-            #reg = 1e-10 * np.eye(cov.shape[0] - 1)  # Regularization matrix
-            #sigma2 = cov[0, 0] - cov[0, 1:] @ la.solve(cov[1:, 1:] + reg, cov[0, 1:])
             reg = 1e-10 * np.eye(cov.shape[0])  # Regularization matrix
             cov += reg
             sigma2 = cov[0, 0] - cov[0, 1:] @ la.solve(cov[1:, 1:], cov[0, 1:], assume_a='sym')
             Hx_y = 0.5 * np.log(2*np.pi*np.e*sigma2)
-            Ixy = np.log(2) * Hx - Hx_y
+            Ixy = np.log(2)*Hx - Hx_y
 
         # Convert units to bits
         Ixy /= np.log(2)

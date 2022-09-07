@@ -13,6 +13,8 @@ def powerset(iterable, start=0):
     `start` defines the minimum number of items to have in each output subset:
         start=0 will include the empty set;
         start=n will include all subsets of cardinality >= n
+
+    Adapted from: https://docs.python.org/3/library/itertools.html
     """
     s = list(iterable)
     return it.chain.from_iterable(it.combinations(s, r)

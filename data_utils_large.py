@@ -52,9 +52,9 @@ def init_data(params, data=None):
     elif dataset == 'adult':
         # Uncomment for original number of training and test points
         # num_train = 32561 (prime number) and num_data = 48842 (2 * prime number)
-        d = pd.read_csv('adult-dataset-cleaned.csv')
+        d = pd.read_csv('adult-dataset.csv')
         params.num_train = d.shape[0]
-        d = d.append(pd.read_csv('adult-test-dataset-cleaned.csv'))
+        d = d.append(pd.read_csv('adult-test-dataset.csv'))
         params.num_data = d.shape[0]
 
         # Neglect last few data points to get more manageable numbers
@@ -65,13 +65,27 @@ def init_data(params, data=None):
         #d = d.append(pd.read_csv('adult-test-dataset-cleaned.csv')[:16000])
         #params.num_data = d.shape[0]
 
+        occ_keys=np.unique(d[['occupation']])
+        occ_vals=np.arange(occ_keys.shape[0])
+        occ_map=dict(zip(occ_keys, occ_vals))
+        for occ in occ_keys:
+            d.replace(occ,occ_map[occ],inplace=True)
+
+        work_keys=np.unique(d[['workclass']].astype(str))
+        work_vals=np.arange(work_keys.shape[0])
+        work_map=dict(zip(work_keys,work_vals))
+        for work in work_keys:
+            d.replace(work,work_map[work],inplace=True)
+
         d['race-num'] = (d['race'] == 'White').astype(int)     # B=0; W=1
         d['sex-num'] = (d['sex'] == 'Female').astype(int)      # M=0; F=1
         d['income-num'] = (d['income'] == '>50K').astype(int)  # <50K=0; >50K=1
-        X = d[['age', 'education-num', 'hours-per-week']].to_numpy()
+        X = d[['occupation', 'workclass', 'age', 'education-num', 'hours-per-week']].to_numpy()
         Y = d['income-num'].to_numpy()
         Z = d[['race-num', 'sex-num']].to_numpy()
 
+
+        
         # Choose a balanced sample of output classes
         class_inds = [np.where((Y == 0) & (Z[:, 1] == 0))[0],  # Men, <50K
                       np.where((Y == 1) & (Z[:, 1] == 0))[0],  # Men, >50K
@@ -110,7 +124,7 @@ def init_data(params, data=None):
         # Should NOT shuffle after this! We need to maintain the individual
         # statistics of the train and test sets
 
-        X = X[inds_trunc, :].astype(float)
+        X = X[inds_trunc,:].astype(float)
         Y = Y[inds_trunc]
         Z = Z[inds_trunc, :]
 
@@ -118,8 +132,10 @@ def init_data(params, data=None):
         params.num_train = train_inds_trunc.size
 
         # Standardize features based on training data
-        X -= X[:params.num_train].mean(axis=0)
-        X /= X[:params.num_train].std(axis=0)
+        X[:,2:] -= X[:params.num_train,2:].mean(axis=0)
+        X[:,2:] /= X[:params.num_train,2:].std(axis=0)
+        #X -= X[:params.num_train].mean(axis=0)
+        #X /= X[:params.num_train].std(axis=0)
 
         data.data = (X, Y, Z)
 
