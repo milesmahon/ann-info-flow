@@ -12,7 +12,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 
 from param_utils import init_params
-from data_utils import init_data, print_data_stats
+from data_utils_small import init_data, print_data_stats
 
 
 # TODO: Put this into a separate module, otherwise joblib complains. See

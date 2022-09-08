@@ -13,7 +13,7 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 
 from param_utils import init_params
-from data_utils import init_data, print_data_stats
+from data_utils_cnn import init_data, print_data_stats
 
 
 class FullNet(nn.Module):
