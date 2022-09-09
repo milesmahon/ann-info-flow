@@ -24,13 +24,13 @@ class RNN(nn.Module):
         return hidden
 
     def forward(self, x):
-        # TODO why not pass in hidden? where is hidden state stored/why isn't it?
         batch_size = x.size(0)
         hidden = self.init_hidden_layer(batch_size)
         output, hidden = self.rnn(x, hidden)
 
         # reshape output to fit into fc layer
-        output = output.contiguous().view(-1, self.hidden_dimensions)
+        # output = output.contiguous().view(-1, self.hidden_dimensions)
+        print(output.shape())
         output = self.fc(output)
 
         return output, hidden
@@ -131,9 +131,12 @@ num_chars=25
 for epoch in range(1, n_epochs + 1):
     optimizer.zero_grad()
     input_sequences.to(device)
-    output, hidden = model(input_sequences) # TODO does this call forward?
-    # print(target_sequences.view(-1))
-    loss = loss_function(output, target_sequences.view(-1).long()) # TODO .view again
+    print(input_sequences.size())
+    output, hidden = model(input_sequences)
+    print(output.size())
+    print(target_sequences.size())
+    print(target_sequences.view(-1).size())
+    loss = loss_function(output, target_sequences.view(-1).long())
     loss.backward()
     optimizer.step()
 
