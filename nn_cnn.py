@@ -213,7 +213,7 @@ def train_ann(run, data, params, test=False, random_seed=None):
 
 
 if __name__ == '__main__':
-    params = init_params(dataset='adult')
+    params = init_params()
 
     parser = argparse.ArgumentParser(description='Train ANN on a dataset')
     parser.add_argument('-d', '--dataset', choices=params.datasets, help='Dataset to use for analysis')

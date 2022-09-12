@@ -79,7 +79,7 @@ if __name__ == '__main__':
     elif subfolder == 'kernel-svm':
         info_method = 'Kernel SVM'
 
-    if dataset == 'adult':
+    if 'adult' in dataset:
         dataset = 'Adult'
     elif dataset == 'tinyscm':
         dataset = 'Synthetic'

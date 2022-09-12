@@ -96,7 +96,7 @@ def analyze_info_flow(net, data, params, full=True, test=True):
     X, Y, Z = data.data[:3]
     X = np.array(X)
     Y = np.array(Y)
-    if data.dataset == 'adult': # Adult dataset: 0 for race; 1 for gender
+    if 'adult' in data.dataset: # Adult dataset: 0 for race; 1 for gender
         Z = np.array(Z)[:, 1]
     else:                       # Others (incl Tiny SCM): only one protected attr
         Z = np.array(Z)

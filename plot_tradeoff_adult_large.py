@@ -96,7 +96,7 @@ if __name__ == '__main__':
     #ax.set_ylim(newlim)
 
     #plt.plot([0, 1], [0, 1], 'k-', linewidth=1, zorder=-1)
-    if dataset == 'adult':
+    if 'adult' in dataset:
         dataset = 'Adult'
     elif dataset == 'tinyscm':
         dataset = 'Synthetic'

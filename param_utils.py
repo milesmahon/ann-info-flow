@@ -12,7 +12,7 @@ def init_params(params=None, dataset=None):
         params = SimpleNamespace()
 
     # Data parameters
-    params.datasets = ['tinyscm', 'adult']
+    params.datasets = ['tinyscm', 'adult-small', 'adult-large']
     if dataset is None:
         params.dataset = params.datasets[0]
     elif dataset in params.datasets:
@@ -32,16 +32,17 @@ def init_params(params=None, dataset=None):
     params.force_retrain = False
 
     # ANN training parameters for each dataset
-    params.num_epochs = {'tinyscm': 50, 'adult': 50}
-    params.minibatch_size = {'tinyscm': 10, 'adult': 10}  # Should be a factor of num_train for each dataset
-    params.learning_rate = {'tinyscm': 0.03, 'adult': 3e-3}
-    params.momentum = {'tinyscm': 0.9, 'adult': 0.9}
-    params.print_every_factor = {'tinyscm': 5, 'adult': 5}  # Prints more for larger numbers
+    params.num_epochs = {'tinyscm': 50, 'adult-small': 50, 'adult-large': 50}
+    params.minibatch_size = {'tinyscm': 10, 'adult-small': 10, 'adult-large': 10}  # Should be a factor of num_train for each dataset
+    params.learning_rate = {'tinyscm': 0.03, 'adult-small': 3e-3, 'adult-large': 3e-3}
+    params.momentum = {'tinyscm': 0.9, 'adult-small': 0.9, 'adult-large': 0.9}
+    params.print_every_factor = {'tinyscm': 5, 'adult-small': 5, 'adult-large': 5}  # Prints more for larger numbers
     params.criterion = {
         #'tinyscm': nn.MSELoss(),
         'tinyscm': nn.CrossEntropyLoss(),  # expects 1-hot encoding at output of NN
         #'adult': nn.MSELoss(),
-        'adult': nn.CrossEntropyLoss(),  # expects 1-hot encoding at output of NN
+        'adult-small': nn.CrossEntropyLoss(),  # expects 1-hot encoding at output of NN
+        'adult-large': nn.CrossEntropyLoss(),  # expects 1-hot encoding at output of NN
     }
 
     # Parameters for initial analysis of the ANN

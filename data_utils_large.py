@@ -49,7 +49,7 @@ def init_data(params, data=None):
         else:
             data.data = joblib.load(params.datafile)
 
-    elif dataset == 'adult':
+    elif dataset in ['adult-small', 'adult-large']:
         # Uncomment for original number of training and test points
         # num_train = 32561 (prime number) and num_data = 48842 (2 * prime number)
         d = pd.read_csv('adult-dataset.csv')
@@ -65,22 +65,26 @@ def init_data(params, data=None):
         #d = pd.concat([d, pd.read_csv('adult-test-dataset-cleaned.csv')[:16000]])
         #params.num_data = d.shape[0]
 
-        occ_keys=np.unique(d[['occupation']])
-        occ_vals=np.arange(occ_keys.shape[0])
-        occ_map=dict(zip(occ_keys, occ_vals))
-        for occ in occ_keys:
-            d.replace(occ,occ_map[occ],inplace=True)
+        cols = ['age', 'education-num', 'hours-per-week']
+        if dataset == 'adult-large':
+            cols = ['occupation', 'workclass', *cols]
 
-        work_keys=np.unique(d[['workclass']].astype(str))
-        work_vals=np.arange(work_keys.shape[0])
-        work_map=dict(zip(work_keys,work_vals))
-        for work in work_keys:
-            d.replace(work,work_map[work],inplace=True)
+            occ_keys = np.unique(d[['occupation']])
+            occ_vals = np.arange(occ_keys.shape[0])
+            occ_map = dict(zip(occ_keys, occ_vals))
+            for occ in occ_keys:
+                d.replace(occ, occ_map[occ], inplace=True)
+
+            work_keys = np.unique(d[['workclass']].astype(str))
+            work_vals = np.arange(work_keys.shape[0])
+            work_map = dict(zip(work_keys,work_vals))
+            for work in work_keys:
+                d.replace(work, work_map[work], inplace=True)
 
         d['race-num'] = (d['race'] == 'White').astype(int)     # B=0; W=1
         d['sex-num'] = (d['sex'] == 'Female').astype(int)      # M=0; F=1
         d['income-num'] = (d['income'] == '>50K').astype(int)  # <50K=0; >50K=1
-        X = d[['occupation', 'workclass', 'age', 'education-num', 'hours-per-week']].to_numpy()
+        X = d[cols].to_numpy()
         Y = d['income-num'].to_numpy()
         Z = d[['race-num', 'sex-num']].to_numpy()
 
@@ -147,7 +151,7 @@ def print_data_stats(data, params):
     X, Y, Z = data.data[:3]
     X = np.array(X)
     Y = np.array(Y)
-    if data.dataset == 'adult': # Adult dataset: 0 for race; 1 for gender
+    if 'adult' in data.dataset: # Adult dataset: 0 for race; 1 for gender
         Z = np.array(Z)[:, 1]
     else:                       # Others (incl Tiny SCM): only one protected attr
         Z = np.array(Z)
