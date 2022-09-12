@@ -54,7 +54,7 @@ def init_data(params, data=None):
         # num_train = 32561 (prime number) and num_data = 48842 (2 * prime number)
         d = pd.read_csv('adult-dataset.csv')
         params.num_train = d.shape[0]
-        d = d.append(pd.read_csv('adult-test-dataset.csv'))
+        d = pd.concat([d, pd.read_csv('adult-test-dataset.csv')])
         params.num_data = d.shape[0]
 
         # Neglect last few data points to get more manageable numbers
@@ -62,7 +62,7 @@ def init_data(params, data=None):
         # datasets, for a total of 48k data points
         #d = pd.read_csv('adult-dataset-cleaned.csv')[:32000]
         #params.num_train = d.shape[0]
-        #d = d.append(pd.read_csv('adult-test-dataset-cleaned.csv')[:16000])
+        #d = pd.concat([d, pd.read_csv('adult-test-dataset-cleaned.csv')[:16000]])
         #params.num_data = d.shape[0]
 
         occ_keys=np.unique(d[['occupation']])
@@ -84,8 +84,6 @@ def init_data(params, data=None):
         Y = d['income-num'].to_numpy()
         Z = d[['race-num', 'sex-num']].to_numpy()
 
-
-        
         # Choose a balanced sample of output classes
         class_inds = [np.where((Y == 0) & (Z[:, 1] == 0))[0],  # Men, <50K
                       np.where((Y == 1) & (Z[:, 1] == 0))[0],  # Men, >50K
