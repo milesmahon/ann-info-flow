@@ -126,7 +126,7 @@ def init_data(params, data=None):
         # Should NOT shuffle after this! We need to maintain the individual
         # statistics of the train and test sets
 
-        X = X[inds_trunc,:].astype(float)
+        X = X[inds_trunc, :].astype(float)
         Y = Y[inds_trunc]
         Z = Z[inds_trunc, :]
 
@@ -134,10 +134,12 @@ def init_data(params, data=None):
         params.num_train = train_inds_trunc.size
 
         # Standardize features based on training data
-        X[:,2:] -= X[:params.num_train,2:].mean(axis=0)
-        X[:,2:] /= X[:params.num_train,2:].std(axis=0)
-        #X -= X[:params.num_train].mean(axis=0)
-        #X /= X[:params.num_train].std(axis=0)
+        if dataset == 'adult-large':
+            X[:, 2:] -= X[:params.num_train, 2:].mean(axis=0)
+            X[:, 2:] /= X[:params.num_train, 2:].std(axis=0)
+        else:
+            X -= X[:params.num_train].mean(axis=0)
+            X /= X[:params.num_train].std(axis=0)
 
         data.data = (X, Y, Z)
 
