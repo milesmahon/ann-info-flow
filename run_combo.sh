@@ -1,5 +1,6 @@
 #!/bin/bash
 # Run ANN training; info flow analysis; tradeoff analysis; scaling analysis
+
 # All parallelization requires 'sem' from GNU parallel: sudo apt install parallel
 # The first time you use sem, run `parallel --citation` in a terminal to
 # acknowledge and silence the citation notice.
@@ -7,8 +8,8 @@
 dataset="adult-small"
 info_meth="corr"
 
-retrain_flag=0    # Retrain if set
-reanalyze_flag=0  # Reanalyze if set
+retrain_flag=1    # Retrain if set
+reanalyze_flag=1  # Reanalyze if set
 run_tradeoff=1    # Run tradeoff if set
 run_scaling=1     # Run scaling if set
 runs=1            # How many trials to run
@@ -29,9 +30,9 @@ results_dir="results-$dataset"
 mkdir -p "$results_dir"
 #cp combos.txt $results_dir
 
-if [ $dataset == "tinyscm" ]; then
-	cp data-10000.pkl $results_dir
-fi
+#if [ $dataset == "tinyscm" ]; then
+#    cp data-10000.pkl $results_dir
+#fi
 
 if [ $dataset == "mnist" ]; then
 	mkdir $results_dir/filters
