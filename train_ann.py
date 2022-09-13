@@ -9,9 +9,9 @@ import numpy as np
 import torch
 import torch.optim as optim
 
-from nn import SmallNet, LargeNet
+from nn_large import SmallNet, LargeNet
 from param_utils import init_params
-from data_utils import init_data, print_data_stats
+from data_utils_large import init_data, print_data_stats
 
 
 def train_ann(data, params, test=False, random_seed=None):

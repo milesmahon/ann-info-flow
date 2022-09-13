@@ -52,7 +52,7 @@ class ShakespeareDataset(Dataset):
     def one_hot_encode(self, char, char_to_int=None):
         if char_to_int is None:
             char_to_int = self.char_to_int
-        features = np.zeros(len(char_to_int))
+        features = np.zeros(len(char_to_int), dtype=np.float32)
         features[char_to_int[char]] = 1
         return features
 

@@ -2,13 +2,14 @@ import torch
 import torch.nn as nn
 # import torchvision
 # import torchvision.transforms as transforms
+import numpy as np
 
 # Device configuration
 from datasets.ShakespeareDataset import ShakespeareDataset
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# Dataset hyperparams # TODO fix these for shakespeare set
+# Dataset hyperparams
 #
 train_dataset = ShakespeareDataset()
 test_dataset = ShakespeareDataset()
@@ -38,7 +39,7 @@ sequence_length = train_dataset.x.size()[1]
 #                                           transform=transforms.ToTensor())
 
 # Hyper-parameters
-num_epochs = 2
+num_epochs = 1000
 learning_rate = 0.001
 hidden_size = 128
 num_layers = 2
@@ -53,7 +54,9 @@ test_loader = torch.utils.data.DataLoader(dataset=test_dataset,
                                           shuffle=False)
 
 
-# Fully connected neural network with one hidden layer
+# If manually doing step-wise input to the RNN, (e.g., character-by-character),
+#   passing hidden state at each step is required
+#   if passing an entire sequence at once, the RNN module will take care of it.
 class RNN(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, output_size):
         super(RNN, self).__init__()
@@ -67,11 +70,8 @@ class RNN(nn.Module):
         h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(device)
         c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(device)
 
-        # Forward propagate RNN
-        # out, _ = self.rnn(x, h0)
-        # or:
-        out, _ = self.lstm(x, (h0, c0))
-
+        out, hidden = self.lstm(x, (h0, c0))
+        # TODO pass hidden state or output to fc?
         out = self.fc(out)
         # out: (batch_size, seq_length, output_size)
         return out
@@ -100,7 +100,7 @@ for epoch in range(num_epochs):
         loss.backward()
         optimizer.step()
 
-        # use 100 for MNIST, Shakespeare has 3299 sentences = 33 batches
+        # use 100 for MNIST; Shakespeare has 3299 sentences = 33 batches
         if (i + 1) % 10 == 0:
             print(f'Epoch [{epoch + 1}/{num_epochs}], Step [{i + 1}/{n_total_steps}], Loss: {loss.item():.4f}')
 
@@ -125,52 +125,30 @@ for epoch in range(num_epochs):
 #     acc = 100.0 * n_correct / n_samples
 #     print(f'Accuracy of the network on the 10000 test images: {acc} %')
 
-# FILE = "model.pth"
-# torch.save(model, FILE)
+FILE = "model.pth"
+torch.save(model.state_dict(), FILE)
 
+def predict(char):
+    char = train_dataset.one_hot_encode(char)
+    out = model(torch.from_numpy(np.array([[char]])))
+    prob = nn.functional.softmax(out[-1][-1], dim=0).data
+    # print(prob)
+    char_ind = torch.max(prob, dim=0)[1].item()
+    # print(char_ind)
+    return train_dataset.int_to_char[char_ind]
 
-# This function takes in the model and character as arguments and returns the next character prediction and hidden state
-# def predict(model, character):
-#     # One-hot encoding our input to fit into the model
-#     character = np.array([[char_decode[c] for c in character]])
-#     character = one_hot_encode(character, dict_size, character.shape[1], 1)
-#     character = torch.from_numpy(character)
-#     character.to(device)
-#
-#     out, hidden = model(character)
-#
-#     prob = nn.functional.softmax(out[-1], dim=0).data
-#     # Taking the class with the highest probability score from the output
-#     char_ind = torch.max(prob, dim=0)[1].item()
-#
-#     return char_encode[char_ind], hidden
-#
-#
-# # This function takes the desired output length and input characters as arguments, returning the produced sentence
-# def sample(model, out_len, start='hey'):
-#     model.eval() # eval mode
-#     start = start.lower()
-#     # First off, run through the starting characters
-#     chars = [ch for ch in start]
-#     size = out_len - len(chars)
-#     # Now pass in the previous characters and get a new one
-#     for ii in range(size):
-#         char, h = predict(model, chars)
-#         chars.append(char)
-#
-#     return ''.join(chars)
 
 prompt = "hey"
+resp_length = 25
 while (prompt != "end"):
     prompt = input("Say:")
-    sentence = []
+    sentence = ''
+    predicted_char = ''
     for char in prompt:
-        sentence += train_dataset.one_hot_encode(char)
-    resp = model([sentence])
-    print(resp)
-
-    prob = nn.functional.softmax(resp[-1], dim=0).data
-    # train_dataset.int_to_char(torch.max(prob, dim=0)[1].item())
-    # print(''.join(out))
+        predicted_char = predict(char)
+    for i in range(resp_length):
+        sentence += predicted_char
+        predicted_char = predict(predicted_char)
+    print(sentence)
 
 
