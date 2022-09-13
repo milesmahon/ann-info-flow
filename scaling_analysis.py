@@ -14,9 +14,6 @@ from pruning import edge_list, prune_edge
 from analyze_info_flow import analyze_info_flow
 from info_measures import acc_from_mi
 
-from nn import SimpleNet  # Required for joblib.load to work
-# https://stackoverflow.com/questions/49621169/joblib-load-main-attributeerror
-
 
 def concatenate(params, subfolder=''):
     """
@@ -28,9 +25,9 @@ def concatenate(params, subfolder=''):
     delta_biases = []
     for run in range(params.num_runs):
         job_suffix = '-%d' % run
-        tradeoff_filename = os.path.join('results-%s' % params.dataset, subfolder,
-                                         'scaling%s.npz' % job_suffix)
-        data = np.load(tradeoff_filename)
+        scaling_filename = os.path.join('results-%s' % params.dataset, subfolder,
+                                        'scaling%s.npz' % job_suffix)
+        data = np.load(scaling_filename)
         acc_flows.append(data['acc_flows'])
         bias_flows.append(data['bias_flows'])
         delta_accs.append(data['delta_accs'])
@@ -41,8 +38,8 @@ def concatenate(params, subfolder=''):
     delta_accs = np.concatenate(delta_accs)
     delta_biases = np.concatenate(delta_biases)
 
-    tradeoff_filename = os.path.join('results-%s' % params.dataset, subfolder, 'scaling.npz')
-    np.savez_compressed(tradeoff_filename, acc_flows=acc_flows, bias_flows=bias_flows,
+    scaling_filename = os.path.join('results-%s' % params.dataset, subfolder, 'scaling.npz')
+    np.savez_compressed(scaling_filename, acc_flows=acc_flows, bias_flows=bias_flows,
                         delta_accs=delta_accs, delta_biases=delta_biases)
 
 
@@ -135,9 +132,9 @@ if __name__ == '__main__':
             print()
 
     job_suffix = ('-%d' % args.job) if args.job is not None else '' # For savefiles
-    tradeoff_filename = os.path.join('results-%s' % params.dataset, args.subfolder,
-                                     'scaling%s.npz' % job_suffix)
-    np.savez_compressed(tradeoff_filename, orig_accs=np.array(orig_accs),
+    scaling_filename = os.path.join('results-%s' % params.dataset, args.subfolder,
+                                    'scaling%s.npz' % job_suffix)
+    np.savez_compressed(scaling_filename, orig_accs=np.array(orig_accs),
                         orig_biases=np.array(orig_biases),
                         delta_accs=np.array(delta_accs),
                         delta_biases=np.array(delta_biases),

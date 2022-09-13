@@ -13,8 +13,6 @@ import matplotlib.cm as cm
 
 from param_utils import init_params
 from pruning import edge_list
-from nn import SimpleNet  # Required for joblib.load to work - weird bug
-# https://stackoverflow.com/questions/49621169/joblib-load-main-attributeerror
 
 
 def fit_line(x, y):

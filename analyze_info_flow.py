@@ -17,9 +17,6 @@ from info_measures import (mutual_info_bin, compute_all_flows,
 from utils import powerset, print_mis, print_edge_data, print_node_data
 from plot_utils import plot_ann
 
-from nn import SimpleNet  # Required for joblib.load to work
-# https://stackoverflow.com/questions/49621169/joblib-load-main-attributeerror
-
 
 def corrcoef(x, y):
     """

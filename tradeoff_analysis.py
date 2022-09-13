@@ -14,9 +14,6 @@ from pruning import prune
 from analyze_info_flow import analyze_info_flow
 from info_measures import acc_from_mi
 
-from nn import SimpleNet  # Required for joblib.load to work - weird bug
-# https://stackoverflow.com/questions/49621169/joblib-load-main-attributeerror
-
 
 def concatenate(params):
     """

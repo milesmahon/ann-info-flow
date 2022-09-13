@@ -4,7 +4,6 @@ from __future__ import print_function, division
 
 import numpy as np
 import copy
-from nn import SimpleNet
 from info_measures import weight_info_flows
 
 
@@ -39,7 +38,7 @@ def prune_edge(net, layer, i, j, prune_factor=0, return_copy=True):
 
     # Create a copy if required
     if return_copy:
-        pruned_net = SimpleNet()
+        pruned_net = type(net)()
         pruned_net.load_state_dict(net.state_dict())
     else:
         pruned_net = net
@@ -58,7 +57,7 @@ def prune_node(net, layer, i, prune_factor=0, return_copy=True):
 
     # Create a copy if required
     if return_copy:
-        pruned_net = SimpleNet()
+        pruned_net = type(net)()
         pruned_net.load_state_dict(net.state_dict())
     else:
         pruned_net = net
@@ -84,7 +83,7 @@ def prune_edges_random(net, num_edges=1, prune_factor=0):
     rng = np.random.default_rng()
     edge_ids_to_prune = rng.choice(edges.shape[0], num_edges, replace=False)
 
-    pruned_net = SimpleNet()
+    pruned_net = type(net)()
     pruned_net.load_state_dict(net.state_dict())
     for k, i, j in edges[edge_ids_to_prune]:
         pruned_net = prune_edge(pruned_net, k, i, j, prune_factor=prune_factor,
@@ -107,7 +106,7 @@ def prune_nodes_random(net, num_nodes=1, prune_factor=0):
     rng = np.random.default_rng()
     node_ids_to_prune = rng.choice(node_list.shape[0], num_nodes, replace=False)
 
-    pruned_net = SimpleNet()
+    pruned_net = type(net)()
     pruned_net.load_state_dict(net.state_dict())
     for k, i in node_list[node_ids_to_prune]:
         pruned_net = prune_node(pruned_net, k, i, prune_factor=prune_factor,
@@ -143,7 +142,7 @@ def prune_nodes_biasacc(net, z_info_flows, y_info_flows, num_nodes=1, prune_fact
     nodes = nodes[sort_inds]
 
     # Prune up to `num_nodes` by prune_factor
-    pruned_net = SimpleNet()
+    pruned_net = type(net)()
     pruned_net.load_state_dict(net.state_dict())
     for k, i in nodes[:num_nodes]:
         pruned_net = prune_node(pruned_net, k, i, prune_factor=prune_factor,
@@ -175,7 +174,7 @@ def prune_edges_proportional(net, z_info_flows, y_info_flows, num_edges=1, prune
     edges = edges[sort_inds]
 
     # Prune up to `num_edges` by prune_factor
-    pruned_net = SimpleNet()
+    pruned_net = type(net)()
     pruned_net.load_state_dict(net.state_dict())
     for k, i, j in edges[:num_edges]:
         pruned_net = prune_edge(pruned_net, k, i, j, prune_factor=prune_factor,
@@ -229,7 +228,7 @@ def prune_path(net, z_info_flows, y_info_flows, num_paths=1, prune_factor=0, acc
     # Prune up to `num_paths` by prune_factor
     # NOTE: It really doesn't make sense to prune multiple paths right now. If
     # two paths overlap, then the common edges will suffer squared pruning
-    pruned_net = SimpleNet()
+    pruned_net = type(net)()
     pruned_net.load_state_dict(net.state_dict())
     for ind in sort_inds[:num_paths]:
         edges = path_edges[ind]          # Pick all edges in the path
@@ -271,20 +270,3 @@ def prune(net, z_info_flows, y_info_flows, prune_factor, params):
                           prune_factor=prune_factor, accbias=accbias)
     else:
         raise NotImplementedError()
-
-
-if __name__ == '__main__':
-    params = init_params()
-    #params.force_regenerate = True  # Only relevant for tinyscm
-    #params.force_retrain = True
-
-    #data = init_data(params, dataset='tinyscm')
-    data = init_data(params, dataset='adult')
-    print(params.num_data, params.num_train)
-
-    # XXX: After implementation of num_runs, this code below is now broken...
-    if params.force_retrain or params.annfile is None:
-        net = train_ann(data, params, test=False)
-    else:
-        net = SimpleNet()
-        net.load_state_dict(torch.load(params.annfile))

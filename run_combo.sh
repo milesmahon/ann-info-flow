@@ -1,38 +1,28 @@
 #!/bin/bash
 # Run ANN training; info flow analysis; tradeoff analysis; scaling analysis
 # All parallelization requires 'sem' from GNU parallel: sudo apt install parallel
+# The first time you use sem, run `parallel --citation` in a terminal to
+# acknowledge and silence the citation notice.
 
-dataset="adult"
+dataset="adult-small"
 info_meth="corr"
-network="small"
 
 retrain_flag=0    # Retrain if set
 reanalyze_flag=0  # Reanalyze if set
 run_tradeoff=1    # Run tradeoff if set
-run_scaling=0     # Run scaling if set
-runs=100          # How many trials to run
+run_scaling=1     # Run scaling if set
+runs=1            # How many trials to run
 
-num_parallel=8    # Maximum number of jobs that can be run in parallel
+num_parallel=1    # Maximum number of jobs that can be run in parallel
 
 export MKL_NUM_THREADS=1
 
-if [ $network == "small" ]; then
-	# NOTE: Edit the symlink so that results-adult points to results-adult-small before running this
-	# OR: Remove the results-adult symlink before starting
-	ln -sf nn_small.py nn.py
-	ln -sf data_utils_small.py data_utils.py
-fi
-
-if [ $network == "large" ]; then
-	# NOTE: Edit the symlink so that results-adult points to results-adult-large before running this
-	# OR: Remove the results-adult symlink before starting
-	ln -sf nn_large.py nn.py
-	ln -sf data_utils_large.py data_utils.py
-fi
-
-if [ $network == "cnn" ]; then
+if [ $dataset == "mnist" ]; then
 	ln -sf nn_cnn.py nn.py
 	ln -sf data_utils_cnn.py data_utils.py
+else
+	ln -sf nn_large.py nn.py
+	ln -sf data_utils_large.py data_utils.py
 fi
 
 results_dir="results-$dataset"
@@ -56,7 +46,7 @@ echo $(date) >>"$outfile"
 # Train the ANNs (not parallelized)
 if [ $retrain_flag == 1 ]; then
 	echo "Training ANNs"
-	python3 -u nn.py -d $dataset --runs $runs | tee "$outfile_root-train.out"
+	python3 -u train_ann.py -d $dataset --runs $runs | tee "$outfile_root-train.out"
 fi
 
 # Run info flow analysis, parallelized over runs

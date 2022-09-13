@@ -7,8 +7,8 @@ import matplotlib.pyplot as plt
 import os
 import sys
 import joblib
-from nn import SimpleNet
 from param_utils import init_params
+
 
 def init_plots(vis):
     # Initialize the plotting axes and add them to the namespace
