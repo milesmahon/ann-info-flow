@@ -8,13 +8,13 @@ from datasets.MotionColorDataset import MotionColorDataset
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Hyperparameters
-num_epochs = 10
-learning_rate = 0.001
+num_epochs = 1000
+learning_rate = 0.0001
 hidden_size = 128
 num_layers = 1
 batch_size = 100
-input_size = 1  # TODO for single random var in/out  use 1/1
-output_size = 1
+input_size = 3
+output_size = 2
 
 # Dataset params
 train_dataset = MotionColorDataset(100, 10)
@@ -45,7 +45,6 @@ class RNN(nn.Module):
 
         out, hidden = self.rnn(x, hidden)
         out = self.fc(out)
-        # out = self.softmax(out) # TODO this?
         # out: (batch_size, seq_length, output_size)
         return out, hidden
 
@@ -67,40 +66,39 @@ print('start')
 n_total_steps = 1000
 for epoch in range(num_epochs):
     for i, (dots, label) in enumerate(train_dataset):
-        optimizer.zero_grad()
         hidden = model.init_hidden()
         for dot in dots:
-            output, hidden = model(torch.from_numpy(np.array([[dot]])), hidden)
-            print(output, label)
-        loss = criterion(output.view(-1), torch.from_numpy(np.array(np.float32(label))))
+            output, hidden = model(torch.from_numpy(np.array([dot])), hidden)
+        optimizer.zero_grad()
+        loss = criterion(output.view(-1), torch.from_numpy(np.array(label)))
         # print(loss)
         if (i + 1) % 100 == 0:
-            print(f'Epoch [{epoch + 1}/{num_epochs}], Step [{i + 1}/{n_total_steps}], Loss: {loss.item():.4f}')
+            print(f'Epoch [{epoch + 1}/{num_epochs}], Step [{i + 1}/{n_total_steps}], Loss: {loss.item()*1000:.6f}')
         loss.backward()
         optimizer.step()
         if i >= n_total_steps:
             break
 
-# Test the model
-# In test phase, we don't need to compute gradients (for memory efficiency)
-# MNIST
-# with torch.no_grad():
-#     n_correct = 0
-#     n_samples = 0
-#     for images, labels in test_loader:
-#         # images = images.reshape(-1, sequence_length, input_size).to(device)  # needed for MNIST
-#         images = images.to(device)  # Shakespeare
-#         labels = labels.to(device)
-#         outputs = model(images)
-#         # max returns (value, index)
-#         _, predicted = torch.max(outputs.data, 1)
-#         n_samples += labels.size(0)
-#         print(predicted.size())
-#         print(labels.size())
-#         n_correct += (predicted == labels).sum().item()
-#
-#     acc = 100.0 * n_correct / n_samples
-#     print(f'Accuracy of the network on the 10000 test images: {acc} %')
-
 FILE = "model.pth"
 torch.save(model.state_dict(), FILE)
+
+# Test the model
+with torch.no_grad():
+    n_correct = 0
+    n_samples = 1000
+    loss = 0.
+    for i, (dots, label) in enumerate(test_dataset):
+        hidden = model.init_hidden()
+        for dot in dots:
+            output, hidden = model(torch.from_numpy(np.array([dot])), hidden)
+        if torch.equal(output.view(-1), torch.from_numpy(np.array(label))):
+            n_correct += 1
+            print(n_correct)
+        loss += criterion(output.view(-1), torch.from_numpy(np.array(label)))
+        if i == n_samples:
+            break
+
+    acc = 100.0 * n_correct / n_samples
+    avg_loss = loss / n_samples
+    print(f'Accuracy of the network on the {n_samples} test images: {acc} %')
+    print(f'Average loss on the {n_samples} test images: {avg_loss}')
