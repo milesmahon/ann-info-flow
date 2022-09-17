@@ -13,21 +13,12 @@ learning_rate = 0.0001
 hidden_size = 128
 num_layers = 1
 batch_size = 100
-input_size = 3
-output_size = 2
+input_size = 3  # (motion (float), color (float), context (bool/int))
+output_size = 2  # (motion l/r, color r/g (bool/ints))
 
 # Dataset params
 train_dataset = MotionColorDataset(100, 10)
 test_dataset = MotionColorDataset(100, 10)
-
-# Data loader
-# train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
-#                                            batch_size=batch_size,
-#                                            shuffle=True)
-#
-# test_loader = torch.utils.data.DataLoader(dataset=test_dataset,
-#                                           batch_size=batch_size,
-#                                           shuffle=False)
 
 
 class RNN(nn.Module):
@@ -40,20 +31,13 @@ class RNN(nn.Module):
 
     # if x is a batch, no need to pass hidden state beyond initial h0
     def forward(self, x, hidden):
-        # Set initial hidden states (and cell states for LSTM)
-        # h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(device)
-
-        out, hidden = self.rnn(x, hidden)
+        out, hidden_i = self.rnn(x, hidden)
         out = self.fc(out)
-        # out: (batch_size, seq_length, output_size)
-        return out, hidden
+        return out, hidden_i
 
     def init_hidden(self):
         return torch.zeros(self.num_layers, self.hidden_size).to(device)
 
-
-# input_size = 3  # (motion (float), color (float), context (bool/int))
-# output_size = 2  # (motion l/r, color r/g (bool/ints))
 
 model = RNN(input_size, hidden_size, num_layers, output_size).to(device)
 
@@ -61,8 +45,8 @@ model = RNN(input_size, hidden_size, num_layers, output_size).to(device)
 criterion = nn.MSELoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-print('start')
-# Train the model
+# training
+print('training model')
 n_total_steps = 1000
 for epoch in range(num_epochs):
     for i, (dots, label) in enumerate(train_dataset):
