@@ -9,7 +9,7 @@ from datasets.MotionColorDataset import MotionColorDataset
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Hyperparameters
-num_epochs = 100
+num_epochs = 10
 learning_rate = 0.0001
 hidden_size = 128
 num_layers = 1
@@ -31,7 +31,6 @@ class RNN(nn.Module):
         self.fc1 = nn.Linear(hidden_size, 64)
         self.fc2 = nn.Linear(64, output_size)
 
-    # if x is a batch, no need to pass hidden state beyond initial h0
     def forward(self, x, hidden):
         out, hidden_i = self.rnn(x, hidden)
         out = self.fc1(out)
@@ -47,6 +46,16 @@ model = RNN(input_size, hidden_size, num_layers, output_size).to(device)
 # Loss and optimizer
 criterion = nn.MSELoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
+## TODO
+# why are labels not what I expect? (motion and color seem to be swapped)
+## e.g.:
+# sample()
+# For [-0.7030578, 1.1485194, 1.0], model thinks: 1, truth is: -1
+# For [-1.4347728, 0.5917345, 1.0], model thinks: 1, truth is: -1
+# For [-0.6270002, 0.7519773, 1.0], model thinks: 1, truth is: -1
+# For [-0.4843572, 1.2000422, 1.0], model thinks: 1, truth is: -1
+
 
 # training
 print('training model')
@@ -79,21 +88,30 @@ def translate_output(x):
 FILE = "model.pth"
 torch.save(model.state_dict(), FILE)
 
+# dot format: [color, motion, context] where context=0 -> motion, context=1 -> color
+def sample(debug=True):
+    hidden = model.init_hidden()
+    dots, label = test_dataset[0]
+    for dot in dots:
+        output, hidden = model(torch.from_numpy(np.array([dot])), hidden)
+        translated_output = translate_output(output)
+        translated_label = translate_output(torch.from_numpy(label))
+        if debug:
+            print(f"For {dot}, model thinks: {translated_output}, truth is: {translated_label}")
+    return output, label, (translated_output == translated_label)
+
+
+n_samples = 1000
+
 # Test the model
 with torch.no_grad():
     n_correct = 0
-    n_samples = 1000
-    loss = 0.
-    for i, (dots, label) in enumerate(test_dataset):
-        hidden = model.init_hidden()
-        for dot in dots:
-            output, hidden = model(torch.from_numpy(np.array([dot])), hidden)
-        if translate_output(output) == translate_output(torch.from_numpy(label)):
-            n_correct += 1
+    for i in range(n_samples):
+        loss = 0.
+        output, label, is_match = sample(debug=False)
         loss += criterion(output.view(-1), torch.from_numpy(np.array(label)))
-        if i == n_samples:
-            break
-
+        if is_match:
+            n_correct += 1
     acc = 100.0 * n_correct / n_samples
     avg_loss = loss / n_samples
     print(f'Accuracy of the network on the {n_samples} test images: {acc} %')
