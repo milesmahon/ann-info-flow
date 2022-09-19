@@ -6,3 +6,5 @@ old/
 results*
 figures*
 paper/
+.idea/
+data/
