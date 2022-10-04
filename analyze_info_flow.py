@@ -9,7 +9,9 @@ import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
+from torch import nn
 
+from datasets.MotionColorDataset import MotionColorDataset
 from param_utils import init_params
 from data_utils import init_data, print_data_stats
 from info_measures import (mutual_info_bin, compute_all_flows,
@@ -52,12 +54,13 @@ def compute_info_flows(Z_test, Xint, layer_sizes, header, weights, full=True,
         print('Accuracies:')
         print(header)
 
-    z_mis = [None,] * num_layers
+    z_mis = [None, ] * num_layers
     for i in range(num_layers):
         if verbose: print(i, end='', flush=True)
         z_mis[i] = {(): 0}
         if Xint[i].ndim == 1:
             Xint[i] = Xint[i].reshape((-1, 1))
+        # TODO MM js is a tuple
         for js in powerset(range(layer_sizes[i]), start=1):  # start=1 avoids the empty set
             z_mi, z_acc = mutual_info_bin(Z_test, Xint[i][:, js], Hx=1,
                                           return_acc=True, method=info_method)
@@ -129,6 +132,7 @@ def analyze_info_flow(net, data, params, full=True, test=True):
 
         # Extract intermediate activations from the network
         Xint = [actvn.numpy() for actvn in net.activations]
+        # TODO MM I think this only gets activations for the final run?
 
     num_layers = len(Xint)
     layer_sizes = [(Xint_.shape[1] if Xint_.ndim > 1 else 1) for Xint_ in Xint]
@@ -167,6 +171,138 @@ def analyze_info_flow(net, data, params, full=True, test=True):
     else:
         y_mi = compute_info_flows(Y_test, Xint, layer_sizes, header, weights,
                                   full=full, info_method=params.info_method, verbose=True)
+
+    #plt.figure()
+    #mask = (Yhat > 0.5)
+    #plt.plot(U_test[mask, 0], U_test[mask, 1], 'C0o', alpha=0.3)
+    #plt.plot(U_test[~mask, 0], U_test[~mask, 1], 'C1o', alpha=0.3)
+
+    #plt.figure()
+    #mask = (Z_test > 0.5)
+    #plt.plot(U_test[mask, 0], Xint[2][mask, 0], 'C0o', alpha=0.3)
+    #plt.plot(U_test[~mask, 0], Xint[2][~mask, 0], 'C1o', alpha=0.3)
+
+    #plt.show()
+
+    if full:
+        return (z_mis, z_info_flows, z_info_flows_weighted,
+                y_mis, y_info_flows, y_info_flows_weighted,
+                accuracy)
+    else:
+        return z_mi, y_mi
+
+
+# from RNN model output, return -1, 0 or 1
+def translate_output(x):
+    classes = [-1, 0, 1]
+    prob = nn.functional.softmax(x[-1], dim=0).data
+    choice = classes[torch.max(prob, dim=0)[1].item()]
+    return choice
+
+
+# X is inputs
+# Y is true labels
+# Z is input to ignore
+# could also be interesting to track info flow of context, especially if only provided once.
+    # vanishing gradient problem if context is provided only once (either at the beginning or end of the sequence)
+# could train on both color and motion, test on just motion, see if color is represented
+# could also think of X as inputs, Y = motion Z = color (labels, that is one-hot encodings of the mean of the
+    # distributions representing them).
+# e.g. X = [1.22, -1.05, 1.0] (motion, color, context)
+    # Y = [0, 0, 1] (one-hot encode of 1, or "right" motion)
+    # Z = [1, 0, 0] (one-hot encode of -1, or "red" color)
+# TODO MM make recurrent
+def analyze_info_flow_rnn(net, info_method, full=True, test=True):
+    """
+    Compute bias and accuracy flows on all edges of the RNN.
+
+    If `full` is False, return bias and accuracy only for the final layer of
+    the neural net (i.e., don't analyze flows).
+
+    If `test` is False, perform info flow analysis on training data (should be
+    used only for debugging)
+    """
+    num_data = 100
+    num_train = 50
+    mc_dataset = MotionColorDataset(num_data, 10)
+    X, Y, Z = mc_dataset.get_xyz(num_data)
+    X = np.array(X)
+    Y = np.array(Y)
+    Z = np.array(Z)
+
+    # PyTorch stuff
+    with torch.no_grad():
+        X_test = X[num_train:]
+        Y_test = Y[num_train:]
+        Z_test = Z[num_train:]
+        num_test = num_data - num_train
+
+        # TODO MM make test recurrent, get activations at each step
+        # maybe also need to get weights at each step to properly construct graph
+        # Compute and print test accuracy
+        net.eval()
+        correct = 0
+        Xint = []
+        for i in range(num_test):
+            hidden = net.init_hidden()
+            Xint_i = []
+            for dot in X_test[i]:
+                output, hidden = net(torch.from_numpy(np.array([dot])), hidden)
+                # Extract intermediate activations from the network
+                for layer in net.activations:
+                    for actvn in layer:
+                        Xint_i.append(actvn.numpy())
+                    # Xint_i.append([actvn.numpy() for actvn in layer])
+            Xint.append(Xint_i)
+
+            label = Y_test[i]
+            translated_output = translate_output(output)
+            translated_label = translate_output(torch.from_numpy(label))
+            if translated_output == translated_label:
+                correct += 1
+
+        accuracy = correct / num_test
+
+        print('Accuracy: %.5g%%' % (100 * accuracy))
+        if full:
+            print()
+    layer_sizes = [(Xint_.shape[1] if Xint_.ndim > 1 else 1) for Xint_ in Xint]
+
+    #num_layers = len(Xint)
+    #z_corr = [corrcoef(Z_test[:, None], Xint[i]) for i in range(num_layers)]
+    #print('Correlations with Z:')
+    #for corr in z_corr: print(corr)
+    #print()
+
+    #print('Correlations with Y:')
+    #y_corr = [corrcoef(Y_test[:, None], Xint[i]) for i in range(num_layers)]
+    #for corr in y_corr: print(corr)
+    #print()
+
+    #print('Weights')
+    weights = net.get_weights()
+    #print_edge_data(weights, layer_sizes)
+    #print()
+
+    header = 'Layer\tX1\tX2\tX3\tX12\tX13\tX23\tX123'
+
+    print('Computing bias flows...')
+    if full:
+        ret = compute_info_flows(Z_test, Xint, layer_sizes, header, weights,
+                                 full=full, info_method=info_method, verbose=True)
+        z_mis, z_info_flows, z_info_flows_weighted = ret
+    else:
+        z_mi = compute_info_flows(Z_test, Xint, layer_sizes, header, weights,
+                                  full=full, info_method=info_method, verbose=True)
+
+    print('Computing accuracy flows...')
+    if full:
+        ret = compute_info_flows(Y_test, Xint, layer_sizes, header, weights,
+                                 full=full, info_method=info_method, verbose=True)
+        y_mis, y_info_flows, y_info_flows_weighted = ret
+    else:
+        y_mi = compute_info_flows(Y_test, Xint, layer_sizes, header, weights,
+                                  full=full, info_method=info_method, verbose=True)
 
     #plt.figure()
     #mask = (Yhat > 0.5)

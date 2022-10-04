@@ -1,4 +1,3 @@
-import numpy.random
 from torch.utils.data import Dataset
 import numpy as np
 from numpy.random import default_rng
@@ -24,20 +23,28 @@ class MotionColorDataset(Dataset):
         self.mu_left = -1
         self.mu_right = 1
 
-    # returns seq_length samples from either the red or green distribution and the left or right distribution
-    def __getitem__(self, index):
-        # green or red (color)
+    def gen_color(self):
         rng = default_rng()
         coin_flip = rng.binomial(1, 0.5, 1)
         color_gen_r = np.float32(rng.normal(self.mu_red, self.sigma_c, self.seq_length))
         color_gen_g = np.float32(rng.normal(self.mu_green, self.sigma_c, self.seq_length))
-        color_gen, color_label = (color_gen_r, -1) if coin_flip == 0 else (color_gen_g, 1)
+        return (color_gen_r, -1) if coin_flip == 0 else (color_gen_g, 1)
 
-        # left or right (direction)
+    def gen_motion(self):
+        rng = default_rng()
         coin_flip = rng.binomial(1, 0.5, 1)
         motion_gen_l = np.float32(rng.normal(self.mu_left, self.sigma_m, self.seq_length))
         motion_gen_r = np.float32(rng.normal(self.mu_right, self.sigma_m, self.seq_length))
-        motion_gen, motion_label = (motion_gen_l, -1) if coin_flip == 0 else (motion_gen_r, 1)
+        return (motion_gen_l, -1) if coin_flip == 0 else (motion_gen_r, 1)
+
+    # returns seq_length samples from either the red or green distribution and the left or right distribution
+    def __getitem__(self, index):
+        rng = default_rng()
+        # green or red (color)
+        color_gen, color_label = self.gen_color()
+
+        # left or right (direction)
+        motion_gen, motion_label = self.gen_motion()
 
         # color or motion (context)
         context = np.float32(rng.binomial(1, 0.5, 1)[0])
@@ -55,3 +62,20 @@ class MotionColorDataset(Dataset):
 
     def __len__(self):
         return self.num_samples
+
+    # For testing information flow, context always indicates color (0.0 as context value). This is to isolate
+    #   information flow analysis to color vs motion rather than bias vs accuracy.
+    # X is same format as in __getitem__()
+    # Y is one-hot encoded color label
+    # Z is motion label
+    def get_xyz(self, num_samples):
+        X = []
+        Y = []
+        Z = []
+        for _ in range(num_samples):
+            color, color_label = self.gen_color()
+            motion, motion_label = self.gen_motion()
+            X.append([[m, c, np.float32(0)] for m, c in zip(color, motion)])
+            Y.append(one_hot(color_label))
+            Z.append(one_hot(motion_label))
+        return X, Y, Z

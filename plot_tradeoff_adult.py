@@ -23,7 +23,7 @@ if __name__ == '__main__':
         subfolder = ''
 
     # subfolder = 'linear-svm'
-    results_dir = 'results-%s' % dataset
+    results_dir = './results-%s' % dataset
     results_subfolder = os.path.join(results_dir, subfolder)
 
     with open(results_dir + '/combos.txt') as f:
