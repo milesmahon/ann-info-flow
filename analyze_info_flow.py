@@ -278,7 +278,6 @@ def analyze_info_flow_rnn(net, info_method, full=True, test=True):
         new_weights.append(weights[0])  # ih
         for i in range(9):
             new_weights.append(weights[1])
-        # TODO MM output weights?
         weights = new_weights
 
         # time unroll RNN activations
