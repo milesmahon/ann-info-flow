@@ -59,7 +59,7 @@ def plot_ann(layer_sizes, weights, plot_params=None, ax=None, flow_type='bias', 
         layer_top = v_spacing * (layer_size - 1) / 2 + (top + bottom) / 2
         for m in range(layer_size):
             circle = plt.Circle((n*h_spacing + left, layer_top - m*v_spacing),
-                                v_spacing/4, color='w', ec='k', zorder=4)
+                                h_spacing/4, color='w', ec='k', zorder=4)
             ax.add_artist(circle)
 
     # Normalize edge weights to lie between -1 and +1
