@@ -1,5 +1,6 @@
 from torch.utils.data import Dataset
 from numpy.random import default_rng
+import numpy as np
 
 
 def one_hot(choice):
@@ -53,6 +54,7 @@ class MotionColorDataset(Dataset):
         for i in range(self.seq_length):
             out.append([color_gen[i], motion_gen[i], context])
 
+        # color = 0, motion = 1
         label = motion_label if context else color_label  # TODO not one-hot encoding this anymore, for MI code
 
         # sequence, label
@@ -68,18 +70,21 @@ class MotionColorDataset(Dataset):
     # X is same format as in __getitem__()
     # Y is one-hot encoded color label
     # Z is motion label
-    def get_xyz(self, num_samples):
+    def get_xyz(self, num_samples, context=None):
         X = []
         Y = []
         Z = []
         U = []
-        for _ in range(num_samples):
-            rng = default_rng()
+        if context is not None:
+            context_values = [context * num_samples]
+        else:
+            context_values = np.random.randint(0, 2, size=num_samples)
+        for i in range(num_samples):
             color, color_label = self.gen_color()
             motion, motion_label = self.gen_motion()
-            context = rng.binomial(1, 0.5, 1)[0]
+            context = context_values[i]
             X.append([[m, c, context] for m, c in zip(color, motion)])
             Y.append(color_label)  # TODO not one-hot encoding this anymore, for MI code
             Z.append(motion_label)
-            U.append(context)
+            U.append(motion_label if context else color_label)
         return X, Y, Z, U

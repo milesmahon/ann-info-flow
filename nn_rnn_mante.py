@@ -1,3 +1,4 @@
+import os.path
 import time
 
 import torch
@@ -34,7 +35,7 @@ class RNN(nn.Module):
         self.num_layers = num_layers
         self.hidden_size = hidden_size
         self.batch_size = batch_size
-        self.rnn = nn.RNN(input_size, hidden_size, num_layers, batch_first=True)
+        self.rnn = nn.RNN(input_size, hidden_size, num_layers, batch_first=True, nonlinearity="relu")
         self.fc1 = nn.Linear(hidden_size, output_size)
         # self.fc2 = nn.Linear(16, output_size)
         self.activations = []
@@ -44,8 +45,7 @@ class RNN(nn.Module):
         x2 = self.fc1(hidden_i)  # was x1 instead of hidden
         # x3 = self.fc2(x2)
         # hidden state is equivalent to activation of RNN layer, no need to pass hidden_i to activations
-        self.activations = [x1, x2]  # TODO MM will miss initial hidden state this way
-                                    # TODO MM include output (x2)?
+        self.activations = [x1, x2]
         return x2, hidden_i
 
     def init_hidden(self, batch_size=None):
@@ -55,7 +55,6 @@ class RNN(nn.Module):
             return torch.zeros(self.num_layers, batch_size, self.hidden_size, dtype=torch.float64).to(device)
 
     def get_weights(self):
-        # TODO MM verify this output makes sense
         weights = []
         # all_weights returns a 4-component list:
         # ih weights, hh weights, ih bias, hh bias
@@ -97,18 +96,12 @@ model = RNN(input_size, hidden_size, num_layers, output_size, batch_size).to(dev
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-## TODO MM bug
-# motion and color seem to be swapped sometimes
-## e.g.:
-# sample()
-# For [-0.7030578, 1.1485194, 1.0], model thinks: 1, truth is: -1
-# For [-1.4347728, 0.5917345, 1.0], model thinks: 1, truth is: -1
-# For [-0.6270002, 0.7519773, 1.0], model thinks: 1, truth is: -1
-# For [-0.4843572, 1.2000422, 1.0], model thinks: 1, truth is: -1
-
 
 def translate_to_cel(label):
     return nonzero(label == 1.0)[0]
+
+
+FILE = "model.pth"
 
 
 def train_rnn():
@@ -131,7 +124,6 @@ def train_rnn():
             # print(f'Epoch [{epoch + 1}/{num_epochs}], Step [{i}/{n_total_steps}], Loss: {loss.item() * 1000:.6f}')
             print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item() * 1000:.6f}')
             print(f'Time elapsed: {time.perf_counter() - time_start:0.2f} seconds')
-    FILE = "model.pth"
     torch.save(model.state_dict(), FILE)
     model.eval()
     return model
@@ -160,30 +152,16 @@ def sample(model, debug=True):
     return output, label, (translated_output == label)
 
 
-model = train_rnn()
+if os.path.isfile(FILE):
+    model.load_state_dict(torch.load(FILE))
+else:
+    model = train_rnn()
+# model.eval()
 
-# Test the model
-# TODO MM fix this?
-with torch.no_grad():
-    n_correct = 0
-    n_samples = 1000
-
-    for i in range(n_samples):
-        loss = 0.
-        output, label, is_match = sample(model, debug=debug)
-        loss += criterion(output.view(-1), torch.from_numpy(np.array(label)))
-        if is_match:
-            n_correct += 1
-    acc = 100.0 * n_correct / n_samples
-    avg_loss = loss / n_samples
-    print(f'Accuracy of the network on the {n_samples} test images: {acc}%')
-    print(f'Average loss on the {n_samples} test images: {avg_loss}')
-
-# TODO MM
 # X =
 # Y =
 # Z =
 # params = [X, Y, Z]
 # see datautils.py for how these are created
 z_mis, z_info_flows, z_info_flows_weighted, y_mis, y_info_flows, y_info_flows_weighted, accuracy = \
-    analyze_info_flow_rnn(model, 'linear-svm')  # TODO MM corr for estimate via correlation
+    analyze_info_flow_rnn(model, 'linear-svm')  # use corr for estimate via correlation

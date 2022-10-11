@@ -129,7 +129,7 @@ def mutual_info_bin(x, y, Hx=None, num_train=None, return_acc=False, method=None
         acc = cv_ret['test_score'].mean()
 
         # Compute conditional entropy of x given y, and mutual information
-        if acc >= 1.0:  # TODO MM uh..
+        if acc >= 1.0:  # TODO MM
             acc = 0.9999
         Hx_y = Hb(acc)
         Ixy = max(Hx - Hx_y, 0)

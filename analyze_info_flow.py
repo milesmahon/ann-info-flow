@@ -131,7 +131,6 @@ def analyze_info_flow(net, data, params, full=True, test=True):
 
         # Extract intermediate activations from the network
         Xint = [actvn.numpy() for actvn in net.activations]
-        # TODO MM I think this only gets activations for the final run?
 
     num_layers = len(Xint)
     layer_sizes = [(Xint_.shape[1] if Xint_.ndim > 1 else 1) for Xint_ in Xint]
@@ -210,7 +209,6 @@ def translate_output(x):
 # e.g. X = [1.22, -1.05, 1.0] (motion, color, context)
     # Y = [0, 0, 1] (one-hot encode of 1, or "right" motion)
     # Z = [1, 0, 0] (one-hot encode of -1, or "red" color)
-# TODO MM make recurrent
 def analyze_info_flow_rnn(net, info_method, full=True, test=True):
     """
     Compute bias and accuracy flows on all edges of the RNN.
@@ -224,7 +222,7 @@ def analyze_info_flow_rnn(net, info_method, full=True, test=True):
     num_data = 200
     num_train = 100
     mc_dataset = MotionColorDataset(num_data, 10)
-    X, Y, Z, true_labels = mc_dataset.get_xyz(num_data)
+    X, Y, Z, true_labels = mc_dataset.get_xyz(num_data)  # TODO MM context = 0 to analyze color flow
     X = np.array(X)  # input
     Y = np.array(Y)  # color
     Z = np.array(Z)  # motion
@@ -246,7 +244,6 @@ def analyze_info_flow_rnn(net, info_method, full=True, test=True):
         output, hidden = net(torch.from_numpy(X_test).float(), hidden.float())
         # Extract intermediate activations from the network
         Xint = [actvn.numpy() for actvn in net.activations]
-        # TODO MM fix this
 
         Yhat = np.squeeze(output.numpy())
         #predictions = (Yhat > 0.5)  # Logic for single output node encoding 0/1 using a sigmoid
@@ -294,8 +291,7 @@ def analyze_info_flow_rnn(net, info_method, full=True, test=True):
 
         header = 'Layer\tX1\tX2\tX3\tX12\tX13\tX23\tX123'
 
-        # TODO distinguish flows based on context
-        print('Computing bias flows...')
+        print('Computing motion flows...')
         if full:
             ret = compute_info_flows(Z_test, Xint, layer_sizes, header, weights,
                                      full=full, info_method=info_method, verbose=True)
@@ -304,7 +300,7 @@ def analyze_info_flow_rnn(net, info_method, full=True, test=True):
             z_mi = compute_info_flows(Z_test, Xint, layer_sizes, header, weights,
                                       full=full, info_method=info_method, verbose=True)
 
-        print('Computing accuracy flows...')
+        print('Computing color flows...')
         if full:
             ret = compute_info_flows(Y_test, Xint, layer_sizes, header, weights,
                                      full=full, info_method=info_method, verbose=True)
@@ -314,10 +310,10 @@ def analyze_info_flow_rnn(net, info_method, full=True, test=True):
                                       full=full, info_method=info_method, verbose=True)
 
         weights = [abs(w) for w in y_info_flows_weighted]
-        plot_ann(layer_sizes, weights, flow_type='acc', label_name='Color flow in RNN')
+        plot_ann(layer_sizes, weights, flow_type='acc', label_name='Weighted color flow in RNN')
 
         weights = [abs(w) for w in z_info_flows_weighted]
-        plot_ann(layer_sizes, weights, flow_type='bias', label_name='Motion flow in RNN')
+        plot_ann(layer_sizes, weights, flow_type='bias', label_name='Weighted motion flow in RNN')
         plt.show()
 
         if full:
