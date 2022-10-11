@@ -14,9 +14,9 @@ import matplotlib.pyplot as plt
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Hyperparameters
-num_epochs = 5
+num_epochs = 50000
 learning_rate = 0.0001
-hidden_size = 3
+hidden_size = 4
 num_layers = 1  # TODO MM try multiple layers
 batch_size = 100
 input_size = 3  # (motion (float), color (float), context (bool/int))
@@ -50,9 +50,9 @@ class RNN(nn.Module):
 
     def init_hidden(self, batch_size=None):
         if batch_size == None:
-            return torch.zeros(self.num_layers, self.batch_size, self.hidden_size).to(device)
+            return torch.zeros(self.num_layers, self.batch_size, self.hidden_size, dtype=torch.float64).to(device)
         else:
-            return torch.zeros(self.num_layers, batch_size, self.hidden_size).to(device)
+            return torch.zeros(self.num_layers, batch_size, self.hidden_size, dtype=torch.float64).to(device)
 
     def get_weights(self):
         # TODO MM verify this output makes sense
@@ -65,30 +65,31 @@ class RNN(nn.Module):
         # weights.append([getattr(self, 'fc%d' % i).weight.data.numpy() for i in range(1, 3)])
         return weights
 
+#
+# weights = [np.array([[0.14349649, 0.22849356, 0.0589799 ],
+#        [0.28085525, 0.33959095, 0.26693599],
+#        [0.29717143, 0.08791292, 0.13488955]]), np.array([[0.07945454, 0.08095541, 0.16352967],
+#        [0.06607006, 0.14902258, 0.03487133],
+#        [0.2830554 , 0.16441791, 0.05926117]]), np.array([[0.10590603, 0.08056413, 0.11820939],
+#        [0.08806567, 0.14830231, 0.02520716],
+#        [0.37728834, 0.16362323, 0.04283765]]), np.array([[0.0941876 , 0.0508151 , 0.11713735],
+#        [0.07832127, 0.09354034, 0.02497856],
+#        [0.33554163, 0.10320387, 0.04244916]]), np.array([[0.10338399, 0.09007417, 0.10102906],
+#        [0.08596848, 0.16580837, 0.0215436 ],
+#        [0.36830362, 0.18293782, 0.03661171]]), np.array([[0.09738886, 0.10750969, 0.14982824],
+#        [0.08098326, 0.19790366, 0.03194962],
+#        [0.34694606, 0.21834882, 0.05429594]]), np.array([[0.07963926, 0.04239418, 0.13476703],
+#        [0.06622366, 0.07803913, 0.02873794],
+#        [0.28371345, 0.08610125, 0.04883794]]), np.array([[0.09901042, 0.09007417, 0.09351238],
+#        [0.08233166, 0.16580837, 0.01994073],
+#        [0.35272284, 0.18293782, 0.03388776]]), np.array([[0.08120352, 0.04799111, 0.06678277],
+#        [0.06752442, 0.08834195, 0.01424087],
+#        [0.2892861 , 0.09746844, 0.02420127]]), np.array([0.7606715 , 0.24665178, 0.32597189])]
+# layer_sizes = [3,3,3,3,3,3,3,3,3,3]
+# plt.figure(figsize=(18,6))
+# ax = plt.gca()
+# plot_ann(layer_sizes, weights, ax=ax)
 
-weights = [np.array([[0.14349649, 0.22849356, 0.0589799 ],
-       [0.28085525, 0.33959095, 0.26693599],
-       [0.29717143, 0.08791292, 0.13488955]]), np.array([[0.07945454, 0.08095541, 0.16352967],
-       [0.06607006, 0.14902258, 0.03487133],
-       [0.2830554 , 0.16441791, 0.05926117]]), np.array([[0.10590603, 0.08056413, 0.11820939],
-       [0.08806567, 0.14830231, 0.02520716],
-       [0.37728834, 0.16362323, 0.04283765]]), np.array([[0.0941876 , 0.0508151 , 0.11713735],
-       [0.07832127, 0.09354034, 0.02497856],
-       [0.33554163, 0.10320387, 0.04244916]]), np.array([[0.10338399, 0.09007417, 0.10102906],
-       [0.08596848, 0.16580837, 0.0215436 ],
-       [0.36830362, 0.18293782, 0.03661171]]), np.array([[0.09738886, 0.10750969, 0.14982824],
-       [0.08098326, 0.19790366, 0.03194962],
-       [0.34694606, 0.21834882, 0.05429594]]), np.array([[0.07963926, 0.04239418, 0.13476703],
-       [0.06622366, 0.07803913, 0.02873794],
-       [0.28371345, 0.08610125, 0.04883794]]), np.array([[0.09901042, 0.09007417, 0.09351238],
-       [0.08233166, 0.16580837, 0.01994073],
-       [0.35272284, 0.18293782, 0.03388776]]), np.array([[0.08120352, 0.04799111, 0.06678277],
-       [0.06752442, 0.08834195, 0.01424087],
-       [0.2892861 , 0.09746844, 0.02420127]]), np.array([0.7606715 , 0.24665178, 0.32597189])]
-layer_sizes = [3,3,3,3,3,3,3,3,3,3]
-plt.figure(figsize=(18,6))
-ax = plt.gca()
-plot_ann(layer_sizes, weights, ax=ax)
 
 model = RNN(input_size, hidden_size, num_layers, output_size, batch_size).to(device)
 
@@ -105,8 +106,6 @@ optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 # For [-0.6270002, 0.7519773, 1.0], model thinks: 1, truth is: -1
 # For [-0.4843572, 1.2000422, 1.0], model thinks: 1, truth is: -1
 
-# TODO MM use cross entropy loss
-
 
 def translate_to_cel(label):
     return nonzero(label == 1.0)[0]
@@ -117,13 +116,13 @@ def train_rnn():
     time_start = time.perf_counter()
     num_data = 100
     mc_dataset = MotionColorDataset(num_data, 10)
-    X, Y, _ = mc_dataset.get_xyz(num_data)
+    X, _, _, true_labels = mc_dataset.get_xyz(num_data)
     X = np.array(X)
-    Y = np.array(Y)  # TODO MM Y IS NOT TRUE LABEL! it's color label
+    Y = np.array(true_labels)
     model.train()
     for epoch in range(num_epochs):
         hidden = model.init_hidden()
-        output, hidden = model(torch.from_numpy(X), hidden)
+        output, hidden = model(torch.from_numpy(X).float(), hidden.float())
         optimizer.zero_grad()
         loss = criterion(torch.squeeze(output), torch.from_numpy(Y))
         loss.backward()
@@ -154,7 +153,7 @@ def sample(model, debug=True):
     dots, label = test_dataset[0]
     if debug:
         print('----')
-    output, hidden = model(torch.from_numpy(np.array([dots])), hidden)
+    output, hidden = model(torch.from_numpy(np.array([dots])).float(), hidden.float())
     translated_output = translate_output(output)
     if debug:
         print(f"For {dots}, model thinks: {translated_output}; true label: {label}")

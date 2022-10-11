@@ -34,7 +34,7 @@ def init_plots(vis):
     plt.tight_layout()
 
 
-def plot_ann(layer_sizes, weights, plot_params=None, ax=None, flow_type='bias', info_method=''):
+def plot_ann(layer_sizes, weights, plot_params=None, ax=None, flow_type='bias', info_method='', label_name=''):
     """
     Plots a visualization of a trained neural network with given weights.
 
@@ -83,8 +83,9 @@ def plot_ann(layer_sizes, weights, plot_params=None, ax=None, flow_type='bias', 
                                   [layer_top_a - m*v_spacing, layer_top_b - o*v_spacing],
                                   color=color, alpha=alpha, linewidth=thickness)
                 ax.add_artist(line)
-
-    if flow_type == 'bias':
+    if label_name != '':
+        ax.set_title(label_name, fontsize=18)
+    elif flow_type == 'bias':
         ax.set_title("Bias flow visualization\n(Dataset: Synthetic, MI est: %s)" % info_method ,fontsize=18)
     else:
         ax.set_title("Accuracy flow visualization\n(Dataset: Synthetic, MI est: %s)" % info_method ,fontsize=18)

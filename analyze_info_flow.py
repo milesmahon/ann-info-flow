@@ -224,16 +224,18 @@ def analyze_info_flow_rnn(net, info_method, full=True, test=True):
     num_data = 200
     num_train = 100
     mc_dataset = MotionColorDataset(num_data, 10)
-    X, Y, Z = mc_dataset.get_xyz(num_data)
-    X = np.array(X)
-    Y = np.array(Y)
-    Z = np.array(Z)
+    X, Y, Z, true_labels = mc_dataset.get_xyz(num_data)
+    X = np.array(X)  # input
+    Y = np.array(Y)  # color
+    Z = np.array(Z)  # motion
+    U = np.array(true_labels)  # true label
 
     # PyTorch stuff
     with torch.no_grad():
         X_test = X[num_train:]
         Y_test = Y[num_train:]
         Z_test = Z[num_train:]
+        U_test = U[num_train:]
         num_test = num_data - num_train
 
         # Compute and print test accuracy
@@ -241,7 +243,7 @@ def analyze_info_flow_rnn(net, info_method, full=True, test=True):
         correct = 0
         # for i in range(num_test):
         hidden = net.init_hidden()
-        output, hidden = net(torch.from_numpy(X_test), hidden)
+        output, hidden = net(torch.from_numpy(X_test).float(), hidden.float())
         # Extract intermediate activations from the network
         Xint = [actvn.numpy() for actvn in net.activations]
         # TODO MM fix this
@@ -249,7 +251,7 @@ def analyze_info_flow_rnn(net, info_method, full=True, test=True):
         Yhat = np.squeeze(output.numpy())
         #predictions = (Yhat > 0.5)  # Logic for single output node encoding 0/1 using a sigmoid
         predictions = (Yhat[:, 0] < Yhat[:, 1]).astype(int)  # Logic for 1-hot encoding of 0/1 at output node
-        correct = (predictions == Y_test).sum()
+        correct = (predictions == U_test).sum()
         accuracy = correct / num_test
 
         print('Accuracy: %.5g%%' % (100 * accuracy))
@@ -275,21 +277,24 @@ def analyze_info_flow_rnn(net, info_method, full=True, test=True):
         # time unroll weights
         # TODO MM hardcoded for now since dependent on layout of network
         new_weights = []
-        new_weights.append(weights[0])  # ih
+        # new_weights.append(weights[0])  # ih
         for i in range(9):
             new_weights.append(weights[1])
+        new_weights.append(weights[2])  # fc layer
         weights = new_weights
 
         # time unroll RNN activations
         new_layers = []
-        for layer in Xint:  # layer is 100x10x4 -- 100 trials of seq.length 10 with 4 (or 3) activations per dot in sequence
+        for layer in Xint[:-1]:  # trials x seq length x activations per layer. exclude last fc layer
             for i in range(layer.shape[1]):  # seq. length
                 new_layers.append(layer[:, i])  # activations in sequence are separate layers
+        new_layers.append(np.squeeze(Xint[-1])) # fc layer
         Xint = new_layers
         layer_sizes = [(Xint_.shape[1] if Xint_.ndim > 1 else 1) for Xint_ in Xint]
 
         header = 'Layer\tX1\tX2\tX3\tX12\tX13\tX23\tX123'
 
+        # TODO distinguish flows based on context
         print('Computing bias flows...')
         if full:
             ret = compute_info_flows(Z_test, Xint, layer_sizes, header, weights,
@@ -308,12 +313,11 @@ def analyze_info_flow_rnn(net, info_method, full=True, test=True):
             y_mi = compute_info_flows(Y_test, Xint, layer_sizes, header, weights,
                                       full=full, info_method=info_method, verbose=True)
 
-        # TODO fix the labels here (they both show up as "accuracy")
         weights = [abs(w) for w in y_info_flows_weighted]
-        plot_ann(layer_sizes, weights, flow_type='color')
+        plot_ann(layer_sizes, weights, flow_type='acc', label_name='Color flow in RNN')
 
         weights = [abs(w) for w in z_info_flows_weighted]
-        plot_ann(layer_sizes, weights, flow_type='motion')
+        plot_ann(layer_sizes, weights, flow_type='bias', label_name='Motion flow in RNN')
         plt.show()
 
         if full:

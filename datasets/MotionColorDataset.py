@@ -1,11 +1,10 @@
 from torch.utils.data import Dataset
-import numpy as np
 from numpy.random import default_rng
 
 
 def one_hot(choice):
     # return np.array([1, 0, 0], dtype=np.float32) if choice == -1 else np.array([0, 0, 1], dtype=np.float32)
-    return np.array([1, 0], dtype=np.float32) if choice == -1 else np.array([0, 1], dtype=np.float32)
+    return [1, 0] if choice == -1 else [0, 1]
 
 
 class MotionColorDataset(Dataset):
@@ -27,15 +26,15 @@ class MotionColorDataset(Dataset):
     def gen_color(self):
         rng = default_rng()
         coin_flip = rng.binomial(1, 0.5, 1)
-        color_gen_r = np.float32(rng.normal(self.mu_red, self.sigma_c, self.seq_length))
-        color_gen_g = np.float32(rng.normal(self.mu_green, self.sigma_c, self.seq_length))
+        color_gen_r = rng.normal(self.mu_red, self.sigma_c, self.seq_length)
+        color_gen_g = rng.normal(self.mu_green, self.sigma_c, self.seq_length)
         return (color_gen_r, 0) if coin_flip == 0 else (color_gen_g, 1)
 
     def gen_motion(self):
         rng = default_rng()
         coin_flip = rng.binomial(1, 0.5, 1)
-        motion_gen_l = np.float32(rng.normal(self.mu_left, self.sigma_m, self.seq_length))
-        motion_gen_r = np.float32(rng.normal(self.mu_right, self.sigma_m, self.seq_length))
+        motion_gen_l = rng.normal(self.mu_left, self.sigma_m, self.seq_length)
+        motion_gen_r = rng.normal(self.mu_right, self.sigma_m, self.seq_length)
         return (motion_gen_l, 0) if coin_flip == 0 else (motion_gen_r, 1)  # TODO using 0 for left, 1 for right to fit with mutual info code
 
     # returns seq_length samples from either the red or green distribution and the left or right distribution
@@ -48,7 +47,7 @@ class MotionColorDataset(Dataset):
         motion_gen, motion_label = self.gen_motion()
 
         # color or motion (context)
-        context = np.float32(rng.binomial(1, 0.5, 1)[0])
+        context = rng.binomial(1, 0.5, 1)[0]
 
         out = []
         for i in range(self.seq_length):
@@ -73,10 +72,14 @@ class MotionColorDataset(Dataset):
         X = []
         Y = []
         Z = []
+        U = []
         for _ in range(num_samples):
+            rng = default_rng()
             color, color_label = self.gen_color()
             motion, motion_label = self.gen_motion()
-            X.append([[m, c, np.float32(0)] for m, c in zip(color, motion)])
+            context = rng.binomial(1, 0.5, 1)[0]
+            X.append([[m, c, context] for m, c in zip(color, motion)])
             Y.append(color_label)  # TODO not one-hot encoding this anymore, for MI code
             Z.append(motion_label)
-        return X, Y, Z
+            U.append(context)
+        return X, Y, Z, U
