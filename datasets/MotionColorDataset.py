@@ -15,12 +15,12 @@ class MotionColorDataset(Dataset):
 
         # distribution variables
         # color
-        self.sigma_c = 0.5
+        self.sigma_c = 1.75
         self.mu_red = -1
         self.mu_green = 1
 
         # motion
-        self.sigma_m = 0.5
+        self.sigma_m = 1.75
         self.mu_left = -1
         self.mu_right = 1
 
@@ -76,7 +76,7 @@ class MotionColorDataset(Dataset):
         Z = []
         U = []
         if context is not None:
-            context_values = [context * num_samples]
+            context_values = [context] * num_samples
         else:
             context_values = np.random.randint(0, 2, size=num_samples)
         for i in range(num_samples):

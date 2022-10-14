@@ -219,7 +219,7 @@ def analyze_info_flow_rnn(net, info_method, full=True, test=True):
     If `test` is False, perform info flow analysis on training data (should be
     used only for debugging)
     """
-    num_data = 200
+    num_data = 200 # TODO MM increase these
     num_train = 100
     mc_dataset = MotionColorDataset(num_data, 10)
     X, Y, Z, true_labels = mc_dataset.get_xyz(num_data)  # TODO MM context = 0 to analyze color flow
@@ -309,12 +309,20 @@ def analyze_info_flow_rnn(net, info_method, full=True, test=True):
             y_mi = compute_info_flows(Y_test, Xint, layer_sizes, header, weights,
                                       full=full, info_method=info_method, verbose=True)
 
+        unity_weights = [np.ones_like(w) for w in weights]
+        flows = [abs(y) for y in weight_info_flows(y_info_flows, unity_weights)]
+        plot_ann(layer_sizes, flows, flow_type='acc', label_name='Unweighted color flow in RNN')
+
+        flows = [abs(z) for z in weight_info_flows(z_info_flows, unity_weights)]
+        plot_ann(layer_sizes, flows, flow_type='bias', label_name='Unweighted motion flow in RNN')
+
         weights = [abs(w) for w in y_info_flows_weighted]
         plot_ann(layer_sizes, weights, flow_type='acc', label_name='Weighted color flow in RNN')
 
         weights = [abs(w) for w in z_info_flows_weighted]
         plot_ann(layer_sizes, weights, flow_type='bias', label_name='Weighted motion flow in RNN')
         plt.show()
+        print("Done")
 
         if full:
             return (z_mis, z_info_flows, z_info_flows_weighted,

@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Hyperparameters
-num_epochs = 50000
+num_epochs = 80000
 learning_rate = 0.0001
 hidden_size = 4
 num_layers = 1  # TODO MM try multiple layers
