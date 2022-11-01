@@ -75,7 +75,12 @@ def plot_ann(layer_sizes, weights, plot_params=None, ax=None, flow_type='bias', 
         for m in range(layer_size_a):
             for o in range(layer_size_b):
                 weight = normalized_weights[n].reshape((layer_size_b, layer_size_a))[o, m]
-                color = 'C0' if flow_type == 'acc' else 'C1'
+                if flow_type == 'acc':
+                    color = 'C0'
+                elif flow_type == 'bias':
+                    color = 'C1'
+                else:
+                    color = 'C2'
                 alpha = alpha0 + abs(weight) * (1 - alpha0)
                 thickness = t0 + abs(weight) * (tmax - t0)
 

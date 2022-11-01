@@ -191,11 +191,11 @@ def analyze_info_flow(net, data, params, full=True, test=True):
 
 
 # from RNN model output, return -1, 0 or 1
-def translate_output(x):
-    classes = [-1, 0, 1]
-    prob = nn.functional.softmax(x[-1], dim=0).data
-    choice = classes[torch.max(prob, dim=0)[1].item()]
-    return choice
+# def translate_output(x):
+#     classes = [-1, 0, 1]
+#     prob = nn.functional.softmax(x[-1], dim=0).data
+#     choice = classes[torch.max(prob, dim=0)[1].item()]
+#     return choice
 
 
 # X is inputs
@@ -219,14 +219,19 @@ def analyze_info_flow_rnn(net, info_method, full=True, test=True):
     If `test` is False, perform info flow analysis on training data (should be
     used only for debugging)
     """
-    num_data = 200 # TODO MM increase these
-    num_train = 100
-    mc_dataset = MotionColorDataset(num_data, 10)
-    X, Y, Z, true_labels = mc_dataset.get_xyz(num_data)  # TODO MM context = 0 to analyze color flow
+    num_data = 2000
+    num_train = 1000  # must be = batch size
+    context_time = "pro"
+    vary_acc = True
+    figure_filename = "figs/MCCTrain99Des85Retro.png"
+
+    mc_dataset = MotionColorDataset(num_data, 10, desired_acc=0.85)  # TODO pass dataset from training
+    X, Y, Z, true_labels, C = mc_dataset.get_xyz(num_data, context_time=context_time, vary_acc=vary_acc)
     X = np.array(X)  # input
     Y = np.array(Y)  # color
     Z = np.array(Z)  # motion
     U = np.array(true_labels)  # true label
+    C = np.array(C)
 
     # PyTorch stuff
     with torch.no_grad():
@@ -234,6 +239,7 @@ def analyze_info_flow_rnn(net, info_method, full=True, test=True):
         Y_test = Y[num_train:]
         Z_test = Z[num_train:]
         U_test = U[num_train:]
+        C_test = C[num_train:]
         num_test = num_data - num_train
 
         # Compute and print test accuracy
@@ -309,6 +315,16 @@ def analyze_info_flow_rnn(net, info_method, full=True, test=True):
             y_mi = compute_info_flows(Y_test, Xint, layer_sizes, header, weights,
                                       full=full, info_method=info_method, verbose=True)
 
+        if context_time != "retro":  # if retrospective context, no need to get context flow
+            print('Computing context flows...')
+            if full:
+                ret = compute_info_flows(C_test, Xint, layer_sizes, header, weights,
+                                         full=full, info_method=info_method, verbose=True)
+                c_mis, c_info_flows, c_info_flows_weighted = ret
+            else:
+                c_mi = compute_info_flows(C_test, Xint, layer_sizes, header, weights,
+                                          full=full, info_method=info_method, verbose=True)
+
         unity_weights = [np.ones_like(w) for w in weights]
         flows = [abs(y) for y in weight_info_flows(y_info_flows, unity_weights)]
         plot_ann(layer_sizes, flows, flow_type='acc', label_name='Unweighted color flow in RNN')
@@ -316,20 +332,30 @@ def analyze_info_flow_rnn(net, info_method, full=True, test=True):
         flows = [abs(z) for z in weight_info_flows(z_info_flows, unity_weights)]
         plot_ann(layer_sizes, flows, flow_type='bias', label_name='Unweighted motion flow in RNN')
 
+        if context_time != "retro":
+            flows = [abs(c) for c in weight_info_flows(c_info_flows, unity_weights)]
+            plot_ann(layer_sizes, flows, flow_type='context', label_name='Unweighted context flow in RNN')
+
+            weights = [abs(c) for c in c_info_flows_weighted]
+            plot_ann(layer_sizes, weights, flow_type='context', label_name='Weighted context flow in RNN')
+
         weights = [abs(w) for w in y_info_flows_weighted]
         plot_ann(layer_sizes, weights, flow_type='acc', label_name='Weighted color flow in RNN')
 
         weights = [abs(w) for w in z_info_flows_weighted]
         plot_ann(layer_sizes, weights, flow_type='bias', label_name='Weighted motion flow in RNN')
         plt.show()
+        # plt.savefig(figure_filename)
+
         print("Done")
 
+        # TODO MM return c info flows?
         if full:
             return (z_mis, z_info_flows, z_info_flows_weighted,
                     y_mis, y_info_flows, y_info_flows_weighted,
                     accuracy)
         else:
-            return z_mi, y_mi
+            return z_mi, y_mi, c_mi
 
 
 def concatenate(params):

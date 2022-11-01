@@ -15,18 +15,18 @@ import matplotlib.pyplot as plt
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Hyperparameters
-num_epochs = 80000
+num_epochs = 80000  # 100,000 takes around 2 minutes w/ 1 layer hidden size 4,
 learning_rate = 0.0001
 hidden_size = 4
 num_layers = 1  # TODO MM try multiple layers
-batch_size = 100
+batch_size = 1000
 input_size = 3  # (motion (float), color (float), context (bool/int))
-output_size = 2  # (-1, 0, 1) one-hot encoded
+output_size = 2  # (-1, 1) one-hot encode
 debug = False
 
 # Dataset params
-train_dataset = MotionColorDataset(100, 10)
-test_dataset = MotionColorDataset(100, 10)
+# train_dataset = MotionColorDataset(100, 10)
+# test_dataset = MotionColorDataset(100, 10)
 
 
 class RNN(nn.Module):
@@ -107,49 +107,49 @@ FILE = "model.pth"
 def train_rnn():
     print('training model')
     time_start = time.perf_counter()
-    num_data = 100
-    mc_dataset = MotionColorDataset(num_data, 10)
-    X, _, _, true_labels = mc_dataset.get_xyz(num_data)
-    X = np.array(X)
-    Y = np.array(true_labels)
     model.train()
-    for epoch in range(num_epochs):
-        hidden = model.init_hidden()
-        output, hidden = model(torch.from_numpy(X).float(), hidden.float())
-        optimizer.zero_grad()
-        loss = criterion(torch.squeeze(output), torch.from_numpy(Y))
-        loss.backward()
-        optimizer.step()
-        if (epoch + 1) % 10 == 0:
-            # print(f'Epoch [{epoch + 1}/{num_epochs}], Step [{i}/{n_total_steps}], Loss: {loss.item() * 1000:.6f}')
-            print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item() * 1000:.6f}')
-            print(f'Time elapsed: {time.perf_counter() - time_start:0.2f} seconds')
+    for i in range(5):  # train on 3 sets of batch_size
+        mc_dataset = MotionColorDataset(batch_size, 10, desired_acc=0.85)
+        X, _, _, true_labels, _ = mc_dataset.get_xyz(batch_size, context_time="retro", vary_acc=True)
+        X = np.array(X)
+        Y = np.array(true_labels)
+        for epoch in range(num_epochs):
+            hidden = model.init_hidden()
+            output, hidden = model(torch.from_numpy(X).float(), hidden.float())
+            optimizer.zero_grad()
+            loss = criterion(torch.squeeze(output), torch.from_numpy(Y))
+            loss.backward()
+            optimizer.step()
+            if (epoch + 1) % 10 == 0:
+                # print(f'Epoch [{epoch + 1}/{num_epochs}], Step [{i}/{n_total_steps}], Loss: {loss.item() * 1000:.6f}')
+                print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item() * 1000:.6f}')
+                print(f'Time elapsed: {time.perf_counter() - time_start:0.2f} seconds')
     torch.save(model.state_dict(), FILE)
     model.eval()
     return model
 
 
 # from model output, return -1, 0 or 1
-def translate_output(x):
-    classes = [-1, 0, 1]
-    choice = []
-    for i in x:
-        prob = nn.functional.softmax(i[-1], dim=0).data
-        choice.append(classes[torch.max(prob, dim=0)[1].item()])
-    return choice
+# def translate_output(x):
+#     classes = [-1, 0, 1]
+#     choice = []
+#     for i in x:
+#         prob = nn.functional.softmax(i[-1], dim=0).data
+#         choice.append(classes[torch.max(prob, dim=0)[1].item()])
+#     return choice
 
 
 # dot format: [color, motion, context] where context=0 -> motion, context=1 -> color
-def sample(model, debug=True):
-    hidden = model.init_hidden(batch_size=1)
-    dots, label = test_dataset[0]
-    if debug:
-        print('----')
-    output, hidden = model(torch.from_numpy(np.array([dots])).float(), hidden.float())
-    translated_output = translate_output(output)
-    if debug:
-        print(f"For {dots}, model thinks: {translated_output}; true label: {label}")
-    return output, label, (translated_output == label)
+# def sample(model, debug=True):
+#     hidden = model.init_hidden(batch_size=1)
+#     dots, label = test_dataset[0]
+#     if debug:
+#         print('----')
+#     output, hidden = model(torch.from_numpy(np.array([dots])).float(), hidden.float())
+#     translated_output = translate_output(output)
+#     if debug:
+#         print(f"For {dots}, model thinks: {translated_output}; true label: {label}")
+#     return output, label, (translated_output == label)
 
 
 if os.path.isfile(FILE):
