@@ -221,11 +221,11 @@ def analyze_info_flow_rnn(net, info_method, full=True, test=True):
     """
     num_data = 2000
     num_train = 1000  # must be = batch size
-    context_time = "pro"
-    vary_acc = True
+    context_time = "retro"
+    vary_acc = True  # TODO if set desired_acc, set vary_acc to false
     figure_filename = "figs/MCCTrain99Des85Retro.png"
 
-    mc_dataset = MotionColorDataset(num_data, 10, desired_acc=0.85)  # TODO pass dataset from training
+    mc_dataset = MotionColorDataset(num_data, 10)  # TODO pass dataset from training
     X, Y, Z, true_labels, C = mc_dataset.get_xyz(num_data, context_time=context_time, vary_acc=vary_acc)
     X = np.array(X)  # input
     Y = np.array(Y)  # color
@@ -315,15 +315,15 @@ def analyze_info_flow_rnn(net, info_method, full=True, test=True):
             y_mi = compute_info_flows(Y_test, Xint, layer_sizes, header, weights,
                                       full=full, info_method=info_method, verbose=True)
 
-        if context_time != "retro":  # if retrospective context, no need to get context flow
-            print('Computing context flows...')
-            if full:
-                ret = compute_info_flows(C_test, Xint, layer_sizes, header, weights,
-                                         full=full, info_method=info_method, verbose=True)
-                c_mis, c_info_flows, c_info_flows_weighted = ret
-            else:
-                c_mi = compute_info_flows(C_test, Xint, layer_sizes, header, weights,
-                                          full=full, info_method=info_method, verbose=True)
+        # if context_time != "retro":  # if retrospective context, no need to get context flow
+        print('Computing context flows...')
+        if full:
+            ret = compute_info_flows(C_test, Xint, layer_sizes, header, weights,
+                                     full=full, info_method=info_method, verbose=True)
+            c_mis, c_info_flows, c_info_flows_weighted = ret
+        else:
+            c_mi = compute_info_flows(C_test, Xint, layer_sizes, header, weights,
+                                      full=full, info_method=info_method, verbose=True)
 
         unity_weights = [np.ones_like(w) for w in weights]
         flows = [abs(y) for y in weight_info_flows(y_info_flows, unity_weights)]
@@ -332,12 +332,12 @@ def analyze_info_flow_rnn(net, info_method, full=True, test=True):
         flows = [abs(z) for z in weight_info_flows(z_info_flows, unity_weights)]
         plot_ann(layer_sizes, flows, flow_type='bias', label_name='Unweighted motion flow in RNN')
 
-        if context_time != "retro":
-            flows = [abs(c) for c in weight_info_flows(c_info_flows, unity_weights)]
-            plot_ann(layer_sizes, flows, flow_type='context', label_name='Unweighted context flow in RNN')
+        # if context_time != "retro":
+        flows = [abs(c) for c in weight_info_flows(c_info_flows, unity_weights)]
+        plot_ann(layer_sizes, flows, flow_type='context', label_name='Unweighted context flow in RNN')
 
-            weights = [abs(c) for c in c_info_flows_weighted]
-            plot_ann(layer_sizes, weights, flow_type='context', label_name='Weighted context flow in RNN')
+        weights = [abs(c) for c in c_info_flows_weighted]
+        plot_ann(layer_sizes, weights, flow_type='context', label_name='Weighted context flow in RNN')
 
         weights = [abs(w) for w in y_info_flows_weighted]
         plot_ann(layer_sizes, weights, flow_type='acc', label_name='Weighted color flow in RNN')

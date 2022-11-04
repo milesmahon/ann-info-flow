@@ -81,7 +81,7 @@ class MotionColorDataset(Dataset):
     # X is same format as in __getitem__() (batch_size (100-1000) x seq length (10) x input size (3))
     # Y is color label
     # Z is motion label
-    # context = 0 or 1, to set all context to color or motion (respectively). default none
+    # context = -1 or 1, to set all context to color or motion (respectively). default none
     # context_time = pro, retro, or none/always for when context should be supplied. default always
     # vary_acc = T/F. vary accuracy between trials. default false
     def get_xyz(self, num_samples, context=None, context_time="always", vary_acc=False):
@@ -95,7 +95,8 @@ class MotionColorDataset(Dataset):
         if context is not None:
             context_values = [context] * num_samples
         else:
-            context_values = np.random.randint(0, 2, size=num_samples)
+            context_values = [random.choice([-1, 1]) for _ in range(num_samples)]
+            # context_values = np.random.randint(0, 2, size=num_samples)
         for i in range(num_samples):
             if vary_acc:  # vary desired accuracy between trials
                 color, color_label = self.gen_color(sigma=des_acc_to_sigma(self.seq_length, random.choice(coherence)))
@@ -105,11 +106,11 @@ class MotionColorDataset(Dataset):
                 motion, motion_label = self.gen_motion()
             context = context_values[i]
             if context_time == "pro":
-                dots = [[m, c, -1] for m, c in zip(color, motion)]  # -1 corresponds to no context
+                dots = [[m, c, 0] for m, c in zip(color, motion)]  # -1 corresponds to no context
                 dots[0][2] = context  # prospective context, only on first dot
                 X.append(dots)
             elif context_time == "retro":
-                dots = [[m, c, -1] for m, c in zip(color, motion)]
+                dots = [[m, c, 0] for m, c in zip(color, motion)]
                 dots[-1][2] = context  # retrospective context, only on last dot
                 X.append(dots)
             else:

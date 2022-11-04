@@ -64,7 +64,7 @@ def plot_ann(layer_sizes, weights, plot_params=None, ax=None, flow_type='bias', 
 
     # Normalize edge weights to lie between -1 and +1
     max_weight = max(np.abs(w).max() for w in weights)
-    normalized_weights = [w / max_weight for w in weights]  # TODO MM how to get more dynamic range?
+    normalized_weights = [w / max_weight for w in weights]
     alpha0 = 0.3
     t0, tmax = (0.5, 5)
 

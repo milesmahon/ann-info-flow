@@ -18,7 +18,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 num_epochs = 80000  # 100,000 takes around 2 minutes w/ 1 layer hidden size 4,
 learning_rate = 0.0001
 hidden_size = 4
-num_layers = 1  # TODO MM try multiple layers
+num_layers = 1
 batch_size = 1000
 input_size = 3  # (motion (float), color (float), context (bool/int))
 output_size = 2  # (-1, 1) one-hot encode
@@ -108,8 +108,8 @@ def train_rnn():
     print('training model')
     time_start = time.perf_counter()
     model.train()
-    for i in range(5):  # train on 3 sets of batch_size
-        mc_dataset = MotionColorDataset(batch_size, 10, desired_acc=0.85)
+    for i in range(3):  # train on 3 sets of batch_size
+        mc_dataset = MotionColorDataset(batch_size, 10)
         X, _, _, true_labels, _ = mc_dataset.get_xyz(batch_size, context_time="retro", vary_acc=True)
         X = np.array(X)
         Y = np.array(true_labels)
