@@ -8,16 +8,14 @@ from numpy import nonzero
 
 from analyze_info_flow import analyze_info_flow_rnn
 from datasets.MotionColorDataset import MotionColorDataset
-from plot_utils import plot_ann
-import matplotlib.pyplot as plt
 
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Hyperparameters
-num_epochs = 80000  # 100,000 takes around 2 minutes w/ 1 layer hidden size 4,
+num_epochs = 100000  # 100,000 takes around 2 minutes w/ 1 layer hidden size 4,
 learning_rate = 0.0001
-hidden_size = 4
+hidden_size = 2
 num_layers = 1
 batch_size = 1000
 input_size = 3  # (motion (float), color (float), context (bool/int))
@@ -64,32 +62,6 @@ class RNN(nn.Module):
         # weights.append([getattr(self, 'fc%d' % i).weight.data.numpy() for i in range(1, 3)])
         return weights
 
-#
-# weights = [np.array([[0.14349649, 0.22849356, 0.0589799 ],
-#        [0.28085525, 0.33959095, 0.26693599],
-#        [0.29717143, 0.08791292, 0.13488955]]), np.array([[0.07945454, 0.08095541, 0.16352967],
-#        [0.06607006, 0.14902258, 0.03487133],
-#        [0.2830554 , 0.16441791, 0.05926117]]), np.array([[0.10590603, 0.08056413, 0.11820939],
-#        [0.08806567, 0.14830231, 0.02520716],
-#        [0.37728834, 0.16362323, 0.04283765]]), np.array([[0.0941876 , 0.0508151 , 0.11713735],
-#        [0.07832127, 0.09354034, 0.02497856],
-#        [0.33554163, 0.10320387, 0.04244916]]), np.array([[0.10338399, 0.09007417, 0.10102906],
-#        [0.08596848, 0.16580837, 0.0215436 ],
-#        [0.36830362, 0.18293782, 0.03661171]]), np.array([[0.09738886, 0.10750969, 0.14982824],
-#        [0.08098326, 0.19790366, 0.03194962],
-#        [0.34694606, 0.21834882, 0.05429594]]), np.array([[0.07963926, 0.04239418, 0.13476703],
-#        [0.06622366, 0.07803913, 0.02873794],
-#        [0.28371345, 0.08610125, 0.04883794]]), np.array([[0.09901042, 0.09007417, 0.09351238],
-#        [0.08233166, 0.16580837, 0.01994073],
-#        [0.35272284, 0.18293782, 0.03388776]]), np.array([[0.08120352, 0.04799111, 0.06678277],
-#        [0.06752442, 0.08834195, 0.01424087],
-#        [0.2892861 , 0.09746844, 0.02420127]]), np.array([0.7606715 , 0.24665178, 0.32597189])]
-# layer_sizes = [3,3,3,3,3,3,3,3,3,3]
-# plt.figure(figsize=(18,6))
-# ax = plt.gca()
-# plot_ann(layer_sizes, weights, ax=ax)
-
-
 model = RNN(input_size, hidden_size, num_layers, output_size, batch_size).to(device)
 
 # Loss and optimizer
@@ -108,9 +80,9 @@ def train_rnn():
     print('training model')
     time_start = time.perf_counter()
     model.train()
-    for i in range(3):  # train on 3 sets of batch_size
+    for i in range(10):  # train on 10 sets of batch_size
         mc_dataset = MotionColorDataset(batch_size, 10)
-        X, _, _, true_labels, _ = mc_dataset.get_xyz(batch_size, context_time="retro", vary_acc=True)
+        X, _, _, true_labels, _ = mc_dataset.get_xyz(batch_size, context_time="retro", vary_acc=False)
         X = np.array(X)
         Y = np.array(true_labels)
         for epoch in range(num_epochs):
@@ -128,30 +100,6 @@ def train_rnn():
     model.eval()
     return model
 
-
-# from model output, return -1, 0 or 1
-# def translate_output(x):
-#     classes = [-1, 0, 1]
-#     choice = []
-#     for i in x:
-#         prob = nn.functional.softmax(i[-1], dim=0).data
-#         choice.append(classes[torch.max(prob, dim=0)[1].item()])
-#     return choice
-
-
-# dot format: [color, motion, context] where context=0 -> motion, context=1 -> color
-# def sample(model, debug=True):
-#     hidden = model.init_hidden(batch_size=1)
-#     dots, label = test_dataset[0]
-#     if debug:
-#         print('----')
-#     output, hidden = model(torch.from_numpy(np.array([dots])).float(), hidden.float())
-#     translated_output = translate_output(output)
-#     if debug:
-#         print(f"For {dots}, model thinks: {translated_output}; true label: {label}")
-#     return output, label, (translated_output == label)
-
-
 if os.path.isfile(FILE):
     model.load_state_dict(torch.load(FILE))
 else:
@@ -163,5 +111,7 @@ else:
 # Z =
 # params = [X, Y, Z]
 # see datautils.py for how these are created
+
 z_mis, z_info_flows, z_info_flows_weighted, y_mis, y_info_flows, y_info_flows_weighted, accuracy = \
-    analyze_info_flow_rnn(model, 'linear-svm')  # use corr for estimate via correlation
+    analyze_info_flow_rnn(model, 'corr')
+    # analyze_info_flow_rnn(model, 'linear-svm')  # use corr for estimate via correlation

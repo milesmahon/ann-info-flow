@@ -1,6 +1,5 @@
 from torch.utils.data import Dataset
 from numpy.random import default_rng
-import numpy as np
 import math
 from scipy.stats import norm
 import random
@@ -106,7 +105,7 @@ class MotionColorDataset(Dataset):
                 motion, motion_label = self.gen_motion()
             context = context_values[i]
             if context_time == "pro":
-                dots = [[m, c, 0] for m, c in zip(color, motion)]  # -1 corresponds to no context
+                dots = [[m, c, 0] for m, c in zip(color, motion)]  # 0 corresponds to no context
                 dots[0][2] = context  # prospective context, only on first dot
                 X.append(dots)
             elif context_time == "retro":
@@ -117,6 +116,6 @@ class MotionColorDataset(Dataset):
                 X.append([[m, c, context] for m, c in zip(color, motion)])  # always
             Y.append(color_label)
             Z.append(motion_label)
-            U.append(motion_label if context else color_label)
+            U.append(color_label if context == 1 else motion_label)  # motion context -1, color context 1
             C.append(context)
         return X, Y, Z, U, C

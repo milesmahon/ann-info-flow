@@ -10,6 +10,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 from torch import nn
+from torch.utils.tensorboard import SummaryWriter
+
 
 from datasets.MotionColorDataset import MotionColorDataset
 from param_utils import init_params
@@ -222,7 +224,7 @@ def analyze_info_flow_rnn(net, info_method, full=True, test=True):
     num_data = 2000
     num_train = 1000  # must be = batch size
     context_time = "retro"
-    vary_acc = True  # TODO if set desired_acc, set vary_acc to false
+    vary_acc = False  # TODO if set desired_acc, set vary_acc to false
     figure_filename = "figs/MCCTrain99Des85Retro.png"
 
     mc_dataset = MotionColorDataset(num_data, 10)  # TODO pass dataset from training
@@ -232,6 +234,10 @@ def analyze_info_flow_rnn(net, info_method, full=True, test=True):
     Z = np.array(Z)  # motion
     U = np.array(true_labels)  # true label
     C = np.array(C)
+
+    # writer = SummaryWriter('runs/test_tensorboard')
+    # writer.add_graph(net, [torch.tensor(np.array(X[num_train:])), net.init_hidden()])
+    # writer.add_graph(net)
 
     # PyTorch stuff
     with torch.no_grad():
@@ -348,8 +354,8 @@ def analyze_info_flow_rnn(net, info_method, full=True, test=True):
         # plt.savefig(figure_filename)
 
         print("Done")
+        print(Xint)
 
-        # TODO MM return c info flows?
         if full:
             return (z_mis, z_info_flows, z_info_flows_weighted,
                     y_mis, y_info_flows, y_info_flows_weighted,
