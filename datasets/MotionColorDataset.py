@@ -105,15 +105,15 @@ class MotionColorDataset(Dataset):
                 motion, motion_label = self.gen_motion()
             context = context_values[i]
             if context_time == "pro":
-                dots = [[m, c, 0] for m, c in zip(color, motion)]  # 0 corresponds to no context
+                dots = [[m, c, 0] for m, c in zip(motion, color)]  # 0 corresponds to no context
                 dots[0][2] = context  # prospective context, only on first dot
                 X.append(dots)
             elif context_time == "retro":
-                dots = [[m, c, 0] for m, c in zip(color, motion)]
+                dots = [[m, c, 0] for m, c in zip(motion, color)]
                 dots[-1][2] = context  # retrospective context, only on last dot
                 X.append(dots)
             else:
-                X.append([[m, c, context] for m, c in zip(color, motion)])  # always
+                X.append([[m, c, context] for m, c in zip(motion, color)])  # always
             Y.append(color_label)
             Z.append(motion_label)
             U.append(color_label if context == 1 else motion_label)  # motion context -1, color context 1

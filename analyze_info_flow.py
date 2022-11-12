@@ -297,7 +297,7 @@ def analyze_info_flow_rnn(net, info_method, full=True, test=True):
         for layer in Xint[:-1]:  # trials x seq length x activations per layer. exclude last fc layer
             for i in range(layer.shape[1]):  # seq. length
                 new_layers.append(layer[:, i])  # activations in sequence are separate layers
-        new_layers.append(np.squeeze(Xint[-1])) # fc layer
+        new_layers.append(np.squeeze(Xint[-1]))  # fc layer
         Xint = new_layers
         layer_sizes = [(Xint_.shape[1] if Xint_.ndim > 1 else 1) for Xint_ in Xint]
 
