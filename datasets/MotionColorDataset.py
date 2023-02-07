@@ -4,10 +4,6 @@ import math
 from scipy.stats import norm
 import random
 
-def one_hot(choice):
-    # return np.array([1, 0, 0], dtype=np.float32) if choice == -1 else np.array([0, 0, 1], dtype=np.float32)
-    return [1, 0] if choice == -1 else [0, 1]
-
 
 def des_acc_to_sigma(seq_length, des_acc):
     return math.sqrt(seq_length) / norm.ppf(des_acc)
@@ -95,7 +91,6 @@ class MotionColorDataset(Dataset):
             context_values = [context] * num_samples
         else:
             context_values = [random.choice([-1, 1]) for _ in range(num_samples)]
-            # context_values = np.random.randint(0, 2, size=num_samples)
         for i in range(num_samples):
             if vary_acc:  # vary desired accuracy between trials
                 color, color_label = self.gen_color(sigma=des_acc_to_sigma(self.seq_length, random.choice(coherence)))

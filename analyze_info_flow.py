@@ -3,19 +3,13 @@
 from __future__ import print_function, division
 
 import os
-import sys
 import joblib
-import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
-from torch import nn
-from torch.utils.tensorboard import SummaryWriter
 
 
 from datasets.MotionColorDataset import MotionColorDataset
-from param_utils import init_params
-from data_utils import init_data, print_data_stats
 from info_measures import (mutual_info_bin, compute_all_flows,
                            weight_info_flows, acc_from_mi)
 from utils import powerset, print_mis, print_edge_data, print_node_data
@@ -191,13 +185,47 @@ def analyze_info_flow(net, data, params, full=True, test=True):
     else:
         return z_mi, y_mi
 
+def test_rnn(net):
+    mc_dataset = MotionColorDataset(10000, 10)  # TODO pass dataset from training
+    X, Y, Z, true_labels, C = mc_dataset.get_xyz(10000, context_time='pro', vary_acc=True)
+    X_test = np.array(X)  # input
+    U_test = np.array(true_labels)  # true label
+    Y_test = np.array(Y)
+    Z_test = np.array(Z)
+    C_test = np.array(C)
+    with torch.no_grad():
+        num_test = 10000
+        # Compute and print test accuracy
+        net.eval()
+        # correct = 0
+        # for i in range(num_test):
+        hidden = net.init_hidden()
+        output, hidden = net(torch.from_numpy(X_test).float(), hidden.float())
+        # Extract intermediate activations from the network
+        # Xint = [actvn.numpy() for actvn in net.activations]
 
-# from RNN model output, return -1, 0 or 1
-# def translate_output(x):
-#     classes = [-1, 0, 1]
-#     prob = nn.functional.softmax(x[-1], dim=0).data
-#     choice = classes[torch.max(prob, dim=0)[1].item()]
-#     return choice
+        Yhat = np.squeeze(output.numpy())
+        #predictions = (Yhat > 0.5)  # Logic for single output node encoding 0/1 using a sigmoid
+        predictions = (Yhat[:, 0] < Yhat[:, 1]).astype(int)  # Logic for 1-hot encoding of 0/1 at output node
+        correct = (predictions == U_test).sum()
+        accuracy = correct / num_test
+
+        trial_results = predictions == U_test
+        wrong_trials = [i for i in range(len(trial_results)) if not trial_results[i]]
+        context_indices = [(0 if i == -1 else 1) for i in C_test]
+        # sample means, really
+        true_means = [X_test[i, :, context_indices[i]].sum()/10 for i in range(len(X_test))]
+        sample_means_exclude_last = [X_test[i, :9, context_indices[i]].sum()/10 for i in range(len(X_test))]
+        pred_match_true_exclude_last = [(1 if ((sample_means_exclude_last[i] > 0 and predictions[i] == 1) or (sample_means_exclude_last[i] < 0 and predictions[i] == 0)) else 0) for i in range(len(predictions))]
+        pred_match_true = [(1 if ((true_means[i] > 0 and predictions[i] == 1) or (true_means[i] < 0 and predictions[i] == 0)) else 0) for i in range(len(predictions))]
+        u_match_true = [(1 if ((true_means[i] > 0 and U_test[i] == 1) or (true_means[i] < 0 and U_test[i] == 0)) else 0) for i in range(len(U_test))]
+        opt_accuracy = sum(u_match_true)/10000
+        print("Optimal accuracy", opt_accuracy)
+        pred_not_adhere = [i for i in range(len(predictions)) if not ((true_means[i] > 0 and predictions[i] == 1) or (true_means[i] < 0 and predictions[i] == 0))]
+        not_adhere_sample_means = [true_means[i] for i in pred_not_adhere]
+        print(not_adhere_sample_means)
+
+        return sum(pred_match_true), accuracy, opt_accuracy, not_adhere_sample_means
 
 
 # X is inputs
@@ -227,17 +255,13 @@ def analyze_info_flow_rnn(net, info_method, full=True, model_name="model"):
     vary_acc = True  # TODO if set desired_acc, set vary_acc to false
     # figure_filename = "figs/MCCTrain99Des85Retro.png"
 
-    mc_dataset = MotionColorDataset(num_data, 10)  # TODO pass dataset from training
+    mc_dataset = MotionColorDataset(num_data, 10)
     X, Y, Z, true_labels, C = mc_dataset.get_xyz(num_data, context_time=context_time, vary_acc=vary_acc)
     X = np.array(X)  # input
     Y = np.array(Y)  # color
     Z = np.array(Z)  # motion
     U = np.array(true_labels)  # true label
     C = np.array(C)
-
-    # writer = SummaryWriter('runs/test_tensorboard')
-    # writer.add_graph(net, [torch.tensor(np.array(X[num_train:])), net.init_hidden()])
-    # writer.add_graph(net)
 
     # PyTorch stuff
     with torch.no_grad():
@@ -250,36 +274,41 @@ def analyze_info_flow_rnn(net, info_method, full=True, model_name="model"):
 
         # Compute and print test accuracy
         net.eval()
-        correct = 0
+        # correct = 0
         # for i in range(num_test):
         hidden = net.init_hidden()
         output, hidden = net(torch.from_numpy(X_test).float(), hidden.float())
         # Extract intermediate activations from the network
         Xint = [actvn.numpy() for actvn in net.activations]
 
-        Yhat = np.squeeze(output.numpy())
+        # Yhat = np.squeeze(output.numpy())
         #predictions = (Yhat > 0.5)  # Logic for single output node encoding 0/1 using a sigmoid
-        predictions = (Yhat[:, 0] < Yhat[:, 1]).astype(int)  # Logic for 1-hot encoding of 0/1 at output node
-        correct = (predictions == U_test).sum()
-        accuracy = correct / num_test
-
-        print('Accuracy: %.5g%%' % (100 * accuracy))
-        motion_indices = [i for i, e in enumerate(C_test) if e == -1]
-        color_indices = [i for i, e in enumerate(C_test) if e == 1]
-        acc_motion = sum([(U_test[i] == predictions[i]).astype(int) for i in motion_indices])/len(motion_indices)
-        acc_color = sum([(U_test[i] == predictions[i]).astype(int) for i in color_indices])/len(color_indices)
-        print('Motion accuracy: %.5g%%' % (100 * acc_motion))
-        print('Color accuracy: %.5g%%' % (100 * acc_color))
-
+        # predictions = (Yhat[:, 0] < Yhat[:, 1]).astype(int)  # Logic for 1-hot encoding of 0/1 at output node
+        # correct = (predictions == U_test).sum()
+        # accuracy = correct / num_test
+        #
+        # print('Accuracy: %.5g%%' % (100 * accuracy))
+        # # motion_indices = [i for i, e in enumerate(C_test) if e == -1]
+        # color_indices = [i for i, e in enumerate(C_test) if e == 1]
+        # # context_indices = [i for i in range(len(U_test)) if Y_test[i] != Z_test[i]]  # cases where context accuracy is distinguishable
+        # # acc_motion = sum([(U_test[i] == predictions[i]).astype(int) for i in motion_indices])/len(motion_indices)
+        # acc_color = sum([(U_test[i] == predictions[i]).astype(int) for i in color_indices])/len(color_indices)
+        # # acc_context = sum([(U_test[i] == predictions[i]).astype(int) for i in context_indices])/len(context_indices)
+        # # print('Motion accuracy: %.5g%%' % (100 * acc_motion))
+        # # acc_motion = 0  # TODO testing color context
+        # print('Color accuracy: %.5g%%' % (100 * acc_color))
+        # print('Context accuracy: %.5g%%' % (100 * acc_context))
 
         # validate dataset correlations
-        yu_corr = np.corrcoef(Y_test, U_test)[0][1]
-        zu_corr = np.corrcoef(Z_test, U_test)[0][1]
-        yz_corr = np.corrcoef(Y_test, Z_test)[0][1]
-        cy_corr = np.corrcoef(C_test, Y_test)[0][1]
-        cz_corr = np.corrcoef(C_test, Z_test)[0][1]
-        cu_corr = np.corrcoef(C_test, U_test)[0][1]
-        print("Correlations:", yu_corr, zu_corr, yz_corr, cy_corr, cz_corr, cu_corr)
+        # yu_corr = np.corrcoef(Y_test, U_test)[0][1]
+        # zu_corr = np.corrcoef(Z_test, U_test)[0][1]
+        # yz_corr = np.corrcoef(Y_test, Z_test)[0][1]
+        # cy_corr = np.corrcoef(C_test, Y_test)[0][1]
+        # cz_corr = np.corrcoef(C_test, Z_test)[0][1]
+        # cu_corr = np.corrcoef(C_test, U_test)[0][1]
+        # print("Correlations:", yu_corr, zu_corr, yz_corr, cy_corr, cz_corr, cu_corr)
+        # print("Correlations:", yu_corr, zu_corr, yz_corr)
+
         if full:
             print()
 
@@ -347,41 +376,44 @@ def analyze_info_flow_rnn(net, info_method, full=True, model_name="model"):
             c_mi = compute_info_flows(C_test, Xint, layer_sizes, header, weights,
                                       full=full, info_method=info_method, verbose=True)
 
+        os.makedirs('rnn-tests-22-11-19-pruning/'+model_name)
         unity_weights = [np.ones_like(w) for w in weights]
         flows = [abs(y) for y in weight_info_flows(y_info_flows, unity_weights)]
         plot_ann(layer_sizes, flows, flow_type='acc', label_name='Unweighted color flow in RNN')
-        plt.savefig('rnn-tests-22-11-15-4node-model8/'+model_name+'/uwcf.jpg')
+        plt.savefig('rnn-tests-22-11-19-pruning/'+model_name+'/uwcf.jpg')
 
         flows = [abs(z) for z in weight_info_flows(z_info_flows, unity_weights)]
         plot_ann(layer_sizes, flows, flow_type='bias', label_name='Unweighted motion flow in RNN')
-        plt.savefig('rnn-tests-22-11-15-4node-model8/'+model_name+'/uwmf.jpg')
+        plt.savefig('rnn-tests-22-11-19-pruning/'+model_name+'/uwmf.jpg')
 
         # if context_time != "retro":
         flows = [abs(c) for c in weight_info_flows(c_info_flows, unity_weights)]
         plot_ann(layer_sizes, flows, flow_type='context', label_name='Unweighted context flow in RNN')
-        plt.savefig('rnn-tests-22-11-15-4node-model8/'+model_name+'/uwconf.jpg')
+        plt.savefig('rnn-tests-22-11-19-pruning/'+model_name+'/uwconf.jpg')
 
         weights = [abs(c) for c in c_info_flows_weighted]
         plot_ann(layer_sizes, weights, flow_type='context', label_name='Weighted context flow in RNN')
-        plt.savefig('rnn-tests-22-11-15-4node-model8/'+model_name+'/wconf.jpg')
+        plt.savefig('rnn-tests-22-11-19-pruning/'+model_name+'/wconf.jpg')
 
         weights = [abs(w) for w in y_info_flows_weighted]
         plot_ann(layer_sizes, weights, flow_type='acc', label_name='Weighted color flow in RNN')
-        plt.savefig('rnn-tests-22-11-15-4node-model8/'+model_name+'/wcf.jpg')
+        plt.savefig('rnn-tests-22-11-19-pruning/'+model_name+'/wcf.jpg')
 
         weights = [abs(w) for w in z_info_flows_weighted]
         plot_ann(layer_sizes, weights, flow_type='bias', label_name='Weighted motion flow in RNN')
-        plt.savefig('rnn-tests-22-11-15-4node-model8/'+model_name+'/wmf.jpg')
+        plt.savefig('rnn-tests-22-11-19-pruning/'+model_name+'/wmf.jpg')
         # plt.show()
         plt.close('all')
 
         print("Done")
-        # print(Xint)
+        # TODO MM just for holding context
+        accuracy, acc_motion, acc_color, acc_context = test_rnn(net)
 
         if full:
             return (z_mis, z_info_flows, z_info_flows_weighted,
                     y_mis, y_info_flows, y_info_flows_weighted,
-                    accuracy)
+                    c_mis, c_info_flows, c_info_flows_weighted,
+                    accuracy, acc_motion, acc_color, acc_context)
         else:
             return z_mi, y_mi, c_mi
 
@@ -402,70 +434,70 @@ def concatenate(params):
     joblib.dump(rets_before, params.analysis_file, compress=3)
 
 
-if __name__ == '__main__':
-    # The params defined below is used for setting argument choices, and default
-    # parameters if dataset is not given in arguments
-    params = init_params()
-
-    parser = argparse.ArgumentParser(description='Analyze information flow analysis on trained ANNs')
-    parser.add_argument('-d', '--dataset', choices=params.datasets, help='Dataset to use for analysis')
-    parser.add_argument('--runs', type=int, help='Number of times to run the analysis.')
-    parser.add_argument('-j', '--job', type=int, default=None,
-                        help='Job number (in 0 .. runs-1): when set, parallelizes over runs; expects `runs` number of jobs')
-    parser.add_argument('--concatenate', action='store_true', help='Concatenate files from parallel runs and exit')
-    parser.add_argument('--info-method', choices=params.info_methods, default=None, help='Choice of information estimation method')
-    parser.add_argument('--subfolder', default='', help='Subfolder for results')
-    args = parser.parse_args()
-
-    print('\n------------------------------------------------')
-    print(args)
-    print('------------------------------------------------\n')
-
-    # Override params specified in param_utils, if given in CLI
-    if args.dataset:
-        # Reinitialize params if the dataset is given
-        params = init_params(dataset=args.dataset)
-    if args.runs:
-        params.num_runs = args.runs
-    if args.job is not None:
-        if args.job < 0 or args.job >= params.num_runs:
-            raise ValueError('`job` must be between 0 and `runs`-1')
-        runs_to_run = [args.job,]
-    else:
-        runs_to_run = range(params.num_runs)
-    if args.info_method is not None:
-        params.info_method = args.info_method
-    if args.subfolder:
-        results_dir, filename = os.path.split(params.analysis_file)
-        params.analysis_file = os.path.join(results_dir, args.subfolder, filename)
-        os.makedirs(os.path.join(results_dir, args.subfolder), exist_ok=True)
-    if args.concatenate:
-        concatenate(params)
-        sys.exit(0)
-
-    # For now, keep data fixed across runs
-    data = init_data(params)
-    print(params.num_data, params.num_train)
-    print_data_stats(data, params) # Check data statistics
-
-    # Load all nets
-    # If the number of runs is >1, the code will expect to find at least `runs`
-    # instances of trained nets
-    nets = joblib.load(params.annfile)
-
-    # Analyze all nets
-    rets_before = []
-    for run in runs_to_run:
-        print('------------------')
-        print('Run %d' % run)
-        # Must do a full analysis the first time around
-        ret_before = analyze_info_flow(nets[run], data, params, full=True)
-        rets_before.append(ret_before)
-
-    filename, extension = params.analysis_file.rsplit('.', 1)
-    job_suffix = ('-%d' % args.job) if args.job is not None else ''
-    savefile = '.'.join([filename + job_suffix, extension])
-    joblib.dump(rets_before, savefile, compress=3)
+# if __name__ == '__main__':
+#     # The params defined below is used for setting argument choices, and default
+#     # parameters if dataset is not given in arguments
+#     params = init_params()
+#
+#     parser = argparse.ArgumentParser(description='Analyze information flow analysis on trained ANNs')
+#     parser.add_argument('-d', '--dataset', choices=params.datasets, help='Dataset to use for analysis')
+#     parser.add_argument('--runs', type=int, help='Number of times to run the analysis.')
+#     parser.add_argument('-j', '--job', type=int, default=None,
+#                         help='Job number (in 0 .. runs-1): when set, parallelizes over runs; expects `runs` number of jobs')
+#     parser.add_argument('--concatenate', action='store_true', help='Concatenate files from parallel runs and exit')
+#     parser.add_argument('--info-method', choices=params.info_methods, default=None, help='Choice of information estimation method')
+#     parser.add_argument('--subfolder', default='', help='Subfolder for results')
+#     args = parser.parse_args()
+#
+#     print('\n------------------------------------------------')
+#     print(args)
+#     print('------------------------------------------------\n')
+#
+#     # Override params specified in param_utils, if given in CLI
+#     if args.dataset:
+#         # Reinitialize params if the dataset is given
+#         params = init_params(dataset=args.dataset)
+#     if args.runs:
+#         params.num_runs = args.runs
+#     if args.job is not None:
+#         if args.job < 0 or args.job >= params.num_runs:
+#             raise ValueError('`job` must be between 0 and `runs`-1')
+#         runs_to_run = [args.job,]
+#     else:
+#         runs_to_run = range(params.num_runs)
+#     if args.info_method is not None:
+#         params.info_method = args.info_method
+#     if args.subfolder:
+#         results_dir, filename = os.path.split(params.analysis_file)
+#         params.analysis_file = os.path.join(results_dir, args.subfolder, filename)
+#         os.makedirs(os.path.join(results_dir, args.subfolder), exist_ok=True)
+#     if args.concatenate:
+#         concatenate(params)
+#         sys.exit(0)
+#
+#     # For now, keep data fixed across runs
+#     data = init_data(params)
+#     print(params.num_data, params.num_train)
+#     print_data_stats(data, params) # Check data statistics
+#
+#     # Load all nets
+#     # If the number of runs is >1, the code will expect to find at least `runs`
+#     # instances of trained nets
+#     nets = joblib.load(params.annfile)
+#
+#     # Analyze all nets
+#     rets_before = []
+#     for run in runs_to_run:
+#         print('------------------')
+#         print('Run %d' % run)
+#         # Must do a full analysis the first time around
+#         ret_before = analyze_info_flow(nets[run], data, params, full=True)
+#         rets_before.append(ret_before)
+#
+#     filename, extension = params.analysis_file.rsplit('.', 1)
+#     job_suffix = ('-%d' % args.job) if args.job is not None else ''
+#     savefile = '.'.join([filename + job_suffix, extension])
+#     joblib.dump(rets_before, savefile, compress=3)
 
     #(z_mis, z_info_flows, z_info_flows_weighted,
     # y_mis, y_info_flows, y_info_flows_weighted, acc) = ret_before
