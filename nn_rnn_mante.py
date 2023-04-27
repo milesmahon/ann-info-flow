@@ -20,7 +20,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # Hyperparameters
 num_epochs = 10000  # 100,000 takes around 2 minutes w/ 1 layer hidden size 4, 1k batch size
 learning_rate = 0.001  # .0001
-hidden_size = 20
+hidden_size = 4
 num_layers = 1
 batch_size = 10000
 input_size = 3  # (motion (float), color (float), context (bool/int))
@@ -131,7 +131,7 @@ def train_new_rnn(model=None):
     time_start = time.perf_counter()
     model.train()
     mc_dataset = MotionColorDataset(batch_size, 10)
-    X, _, _, true_labels, C = mc_dataset.get_xyz(batch_size, context_time="random", vary_acc=True)
+    X, _, _, true_labels, C = mc_dataset.get_xyz(batch_size, context_time="retro", vary_acc=True)
     X = np.array(X)
     Y = np.array(true_labels)
     correct_history = []
@@ -200,19 +200,19 @@ def train_new_rnn(model=None):
 # torch.save(model.state_dict(), FILE)
 
 # load rnn_mante_random
-FILE = 'rnn_mante_random.pth'
-rand_model = RNN(input_size, hidden_size, num_layers, output_size, batch_size).to(device)
-rand_model.load_state_dict(torch.load(FILE, map_location=device))
-
-FILE = 'rnn_mante_retro.pth'
-retro_model = RNN(input_size, hidden_size, num_layers, output_size, batch_size).to(device)
-retro_model.load_state_dict(torch.load(FILE, map_location=device))
-
-z_mis, z_info_flows, z_info_flows_weighted, y_mis, y_info_flows, y_info_flows_weighted, accuracy, acc_motion, acc_color, acc_context = \
-            analyze_info_flow_rnn(rand_model, 'linear-svm', model_name='rand_model')
-
-z_mis, z_info_flows, z_info_flows_weighted, y_mis, y_info_flows, y_info_flows_weighted, accuracy, acc_motion, acc_color, acc_context = \
-            analyze_info_flow_rnn(retro_model, 'linear-svm', model_name='retro_model')
+# FILE = 'rnn_mante_random.pth'
+# rand_model = RNN(input_size, hidden_size, num_layers, output_size, batch_size).to(device)
+# rand_model.load_state_dict(torch.load(FILE, map_location=device))
+#
+# FILE = 'rnn_mante_retro.pth'
+# retro_model = RNN(input_size, hidden_size, num_layers, output_size, batch_size).to(device)
+# retro_model.load_state_dict(torch.load(FILE, map_location=device))
+#
+# z_mis, z_info_flows, z_info_flows_weighted, y_mis, y_info_flows, y_info_flows_weighted, accuracy, acc_motion, acc_color, acc_context = \
+#             analyze_info_flow_rnn(rand_model, 'linear-svm', model_name='rand_model')
+#
+# z_mis, z_info_flows, z_info_flows_weighted, y_mis, y_info_flows, y_info_flows_weighted, accuracy, acc_motion, acc_color, acc_context = \
+#             analyze_info_flow_rnn(retro_model, 'linear-svm', model_name='retro_model')
 
 
 
