@@ -63,9 +63,11 @@ def plot_ann(layer_sizes, weights, plot_params=None, ax=None, flow_type='bias', 
             ax.add_artist(circle)
 
     # Normalize edge weights to lie between -1 and +1
-    max_weight = max(np.abs(w).max() for w in weights)
-    normalized_weights = [w / max_weight for w in weights]
-    alpha0 = 0.3
+    # max_weight = max(np.abs(w).max() for w in weights)
+    # normalized_weights = [w / max_weight for w in weights]
+    normalized_weights = [w / 0.5 for w in weights]  # MM normalizing to .5, since that's around the max we see across both tasks
+    # normalized_weights = weights  # MM normalizing to 1, since max entropy for this task is 1
+    alpha0 = 0.1  # MM originally 0.3
     t0, tmax = (0.5, 5)
 
     # Plot lines for edges

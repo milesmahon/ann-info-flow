@@ -89,6 +89,7 @@ class MotionColorDataset(Dataset):
         coherence = [0.7, 0.85, 0.99]  # if vary_acc
         if context is not None:
             context_values = [context] * num_samples
+            print('context is ' + str(context))
         else:
             context_values = [random.choice([-1, 1]) for _ in range(num_samples)]
         for i in range(num_samples):
@@ -106,6 +107,15 @@ class MotionColorDataset(Dataset):
             elif context_time == "retro":
                 dots = [[m, c, 0] for m, c in zip(motion, color)]
                 dots[-1][2] = context  # retrospective context, only on last dot
+                X.append(dots)
+            elif context_time == "middle":
+                dots = [[m, c, 0] for m, c in zip(motion, color)]
+                dots[5][2] = context  # middle context, only on middle dot
+                X.append(dots)
+            elif context_time == "random" or context_time == "rand":
+                dots = [[m, c, 0] for m, c in zip(motion, color)]
+                rand_point = random.randint(0, len(dots)-1)
+                dots[rand_point][2] = context  # give context at random point
                 X.append(dots)
             else:
                 X.append([[m, c, context] for m, c in zip(motion, color)])  # always

@@ -2,7 +2,7 @@ import torch
 from torchvision import datasets
 from torchvision.transforms import transforms
 
-model = torch.hub.load('pytorch/vision:v0.10.0', 'alexnet', pretrained=True)
+model = torch.hub.load('pytorch/vision:v0.10.0', 'alexnet', pretrained=False)
 
 # change the last layer to 100 classes for cifar100
 model.classifier[6] = torch.nn.Linear(4096, 100)
@@ -44,6 +44,7 @@ def train(model, train_loader, val_loader, num_epochs, learning_rate):
         # validate
         model.eval()
         correct = 0
+        top_5_correct = 0
         total = 0
         for batch_idx, (data, target) in enumerate(val_loader):
             data, target = data.to(device), target.to(device)
@@ -51,10 +52,16 @@ def train(model, train_loader, val_loader, num_epochs, learning_rate):
             _, predicted = torch.max(output.data, 1)
             total += target.size(0)
             correct += (predicted == target).sum().item()
+            # get top-5 accuracy
+            _, predicted = torch.topk(output.data, 5, 1)
+            # check if target is in top-5 predictions
+            top_5_correct += (predicted == target.view(-1, 1).expand_as(predicted)).sum().item()
+
         print('Epoch: %d, Accuracy: %d %%' % (epoch + 1, 100 * correct / total))
+        print('Epoch: %d, Top-5 Accuracy: %d %%' % (epoch + 1, 100 * top_5_correct / total))
 
     # save model
-    torch.save(model.state_dict(), 'alexnet_cifar100.pth')
+    torch.save(model.state_dict(), 'alexnet_cifar100_raw.pth')
 
 
 train(model, train_loader, val_loader, num_epochs=10, learning_rate=0.001)
