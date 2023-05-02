@@ -18,7 +18,8 @@ def prune_network(i, j):
     print(f'start prune{i}_{j}')
     model = RNN(input_size, hidden_size, num_layers, output_size, batch_size).to(device)
     model.load_state_dict(torch.load(f"mante_nets/mante_rnn_{i}.pth", map_location=device))
-    model.rnn.all_weights[0][1][j][j] *= 0  # [0] to squeeze, [1] for hh weights, [to_node], [from_node]
+    with torch.no_grad():
+        model.rnn.all_weights[0][1][j][j] *= 0  # [0] to squeeze, [1] for hh weights, [to_node], [from_node]
     torch.save(model.state_dict(), FILE)
 
 
