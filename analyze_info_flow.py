@@ -188,7 +188,7 @@ def analyze_info_flow(net, data, params, full=True, test=True):
 
 def test_rnn(net):
     mc_dataset = MotionColorDataset(10000, 10)  # TODO pass dataset from training
-    X, Y, Z, true_labels, C = mc_dataset.get_xyz(10000, context_time='random', vary_acc=True)
+    X, Y, Z, true_labels, C = mc_dataset.get_xyz(10000, context_time='retro', vary_acc=True)
     X_test = np.array(X)  # input
     U_test = np.array(true_labels)  # true label
     Y_test = np.array(Y)

@@ -35,6 +35,19 @@ def analyze_network(i):
         f.write(f'acc_motion: {acc_motion}\n')
         f.write(f'acc_color: {acc_color}\n')
         f.write(f'acc_context: {acc_context}\n')
+
+
+# NEXT:
+# for each network,
+#   prune each of the 4 self edges and save as mante_rnn_{i}_pruned_{j}.pth with j in range(4)
+#   test the pruned networks
+#   get pre-prune accuracy for each task from analysis file
+#   get post-prune accuracy for each task
+#   get info flow of each task on each pruned edge from original analysis file
+#   save this as a dataframe
+#   use praveen's seaborn code to plot the dataframe
+
+
 if __name__ == '__main__':
     with Pool(8) as p:
         p.map(gen_network, range(50))
