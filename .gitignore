@@ -8,3 +8,5 @@ figures*
 paper/
 .idea/
 data/
+model-analysis*
+models/
