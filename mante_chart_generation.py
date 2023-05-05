@@ -24,10 +24,10 @@ def get_data_before(i):
             if line.startswith('acc_color'):
                 acc_color = float(line.split(' ')[1])
             if line.startswith('z_info_flows:'):
-                z_info_flows = np.array(ast.literal_eval(line[13:].replace('array(', '').replace(')', '').replace(' ', '')))
+                z_info_flows = ast.literal_eval(line[13:].replace('array(', '').replace(')', '').replace(' ', ''))
                 index_max_motion_flow = np.argmax(z_info_flows[9])  # 9 is last layer before output
             if line.startswith('y_info_flows:'):
-                y_info_flows = np.array(ast.literal_eval(line[13:].replace('array(', '').replace(')', '').replace(' ', '')))
+                y_info_flows = ast.literal_eval(line[13:].replace('array(', '').replace(')', '').replace(' ', ''))
                 index_max_color_flow = np.argmax(y_info_flows[9])
 
     return [i, accuracy/10000, acc_motion, acc_color, index_max_motion_flow, index_max_color_flow]
