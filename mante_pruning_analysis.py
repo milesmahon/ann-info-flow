@@ -14,7 +14,7 @@ output_size = 2  # (-1, 1) one-hot encode
 
 
 def prune_network(i, j):
-    FILE = f"mante_nets/mante_rnn_{i}_pruned_{j})half.pth"
+    FILE = f"mante_nets/mante_rnn_{i}_pruned_{j}_half.pth"
     print(f'start prune{i}_{j} half')
     model = RNN(input_size, hidden_size, num_layers, output_size, batch_size).to(device)
     model.load_state_dict(torch.load(f"mante_nets/mante_rnn_{i}.pth", map_location=device))
